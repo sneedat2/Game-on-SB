@@ -21,6 +21,9 @@ export const defaultMaintenance = () => ({
   message: 'We’re making some upgrades. Be right back - come see us at 5880 Cheviot Rd in the meantime!',
 });
 
+/** Admin menu edits (/admin → Menu), keyed by "section|item name". Empty = Toast as-is. */
+export const defaultMenuOverrides = () => ({ items: {}, hiddenSections: [] });
+
 /** Automatic schedules on, plus the gameday specials shown under each team's games. */
 export const defaultGamedaySettings = () => ({
   auto: true,
@@ -46,6 +49,10 @@ export function migrateContent(c) {
     c.maintenance = defaultMaintenance();
     changed = true;
   }
+  if (!c.menuOverrides) {
+    c.menuOverrides = defaultMenuOverrides();
+    changed = true;
+  }
   if (!c.gamedaySettings) {
     c.gamedaySettings = defaultGamedaySettings();
     c.gameday = (c.gameday ?? []).filter(
@@ -68,6 +75,7 @@ export function defaultContent() {
   return {
     version: 1,
     maintenance: defaultMaintenance(),
+    menuOverrides: defaultMenuOverrides(),
     settings: {
       hours: [
         { days: 'Mon–Sat', open: '11 AM', close: '9:30 PM' },

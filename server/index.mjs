@@ -14,37 +14,13 @@ import handler from 'serve-handler';
 import { handleContentApi, hasAdminCookie } from './api.mjs';
 import { bypassesMaintenance, maintenanceOn, sendMaintenance } from './maintenance.mjs';
 import { checkSiteLogin, loginAllowed, recordFailure, siteLocked } from './auth.mjs';
-import { loadStore } from './store.mjs';
-import { fetchToastGroups, fetchToastMenu, ToastConfigError } from './toastMenu.mjs';
+import { applyOverrides } from './menuOverrides.mjs';
+import { getContent, loadStore } from './store.mjs';
+import { fetchToastGroups, getCachedMenu, ToastConfigError } from './toastMenu.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
 const PORT = Number(process.env.PORT) || 3000;
-const MENU_TTL_MS = 5 * 60_000;
-
-let menuCache = null; // { at, body }
-let inflight = null;
-
-async function getMenu() {
-  if (menuCache && Date.now() - menuCache.at < MENU_TTL_MS) return menuCache.body;
-  inflight ??= fetchToastMenu()
-    .then((body) => {
-      menuCache = { at: Date.now(), body };
-      return body;
-    })
-    .finally(() => {
-      inflight = null;
-    });
-  try {
-    return await inflight;
-  } catch (e) {
-    if (menuCache) {
-      console.warn('[menu] Toast refresh failed, serving cached menu:', e.message);
-      return { ...menuCache.body, stale: true };
-    }
-    throw e;
-  }
-}
 
 function sendJson(res, status, body, extraHeaders = {}) {
   res.writeHead(status, {
@@ -89,7 +65,10 @@ const server = createServer(async (req, res) => {
   if (path === '/api/menu') {
     if (req.method === 'OPTIONS') return sendJson(res, 204, {}, { 'Access-Control-Allow-Headers': 'content-type' });
     try {
-      return sendJson(res, 200, await getMenu(), { 'Cache-Control': 'public, max-age=60' });
+      const menu = await getCachedMenu();
+      // Admin edits (/admin → Menu) are applied on every request, so they show up right away.
+      const items = applyOverrides(menu.items, getContent().menuOverrides);
+      return sendJson(res, 200, { ...menu, items }, { 'Cache-Control': 'no-cache' });
     } catch (e) {
       const status = e instanceof ToastConfigError ? 503 : 502;
       console.error('[menu]', e.message);

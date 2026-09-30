@@ -115,14 +115,27 @@ function isShown(item, sectionId) {
 const priceOf = (item) => (typeof item.price === 'number' ? item.price : undefined);
 
 // ---------------- Sizes (draft beer pours) ----------------
-// Beers show as one row - "Astra Baja Black" - with each pour listed small by its price
-// ("16 oz $5.50", "20 oz $6.50"). Toast can hold sizes two ways; both are handled:
+// Each drink shows as ONE row - "Astra Baja Black" - with each pour listed small by its price
+// ("16 oz $5.50", "22 oz $6.50"). Toast can hold sizes several ways; all are handled:
 //   1. Size pricing: one item whose sizes live in a Size modifier group.
-//   2. Separate items per size: "Astra Baja Black 16oz", "16 oz Astra Baja Black", "Truth (20 oz)".
+//   2. Size in the item name: "Astra Baja Black 16oz", "16 oz Astra Baja Black", "Truth (20 oz) Draft".
+//   3. Size in the group name: a "16 oz" group and a "22 oz" group each listing "Miller Lite".
+// The same drink listed in more than one menu (e.g. a happy hour menu) is only shown once.
 
 const SIZE = String.raw`(?:\d{1,2}(?:\.\d)?\s*(?:oz|ounces?)\.?|pint|pitcher)`;
-const SIZE_PREFIX = new RegExp(String.raw`^\(?(${SIZE})\)?\s*[-–:]?\s+(.+)$`, 'i');
-const SIZE_SUFFIX = new RegExp(String.raw`^(.+?)\s*[-–:]?\s*\(?(${SIZE})\)?$`, 'i');
+const EXTRA = String.raw`(?:\s+(?:draft|drafts|beer|pour|glass))?`;
+const SIZE_PREFIX = new RegExp(String.raw`^\(?(${SIZE})\)?${EXTRA}\s*[-–:]?\s+(.+)$`, 'i');
+const SIZE_SUFFIX = new RegExp(String.raw`^(.+?)\s*[-–:]?\s*\(?(${SIZE})\)?${EXTRA}$`, 'i');
+const SIZE_IN_GROUP = new RegExp(String.raw`(\d{1,2}(?:\.\d)?\s*(?:oz|ounces?)|\bpints?\b|\bpitchers?\b)`, 'i');
+
+/** "Miller Lite Draft" -> "Miller Lite" (the section is already "On Tap"). */
+const cleanDrinkName = (s) => s.replace(/\s*\b(?:draft|drafts)\b\s*/gi, ' ').replace(/\s+/g, ' ').trim() || s.trim();
+
+/** Size named by a group, e.g. "16 oz", "22oz Drafts", "Pints" -> "16 oz" / "Pint". */
+function groupSize(name) {
+  const m = SIZE_IN_GROUP.exec(String(name ?? ''));
+  return m ? sizeLabel(m[1].replace(/s$/i, '')) : undefined;
+}
 
 /** "16oz" -> "16 oz", "pint" -> "Pint" */
 function sizeLabel(raw) {
@@ -157,63 +170,105 @@ function makeSizeLookup(menusPayload) {
   };
 }
 
+// Groups hidden from the app on purpose (and everything under them).
+const HIDDEN_GROUPS = new Set(['nicotine', 'nicotine cans', 'summer', 'growler fill', 'growler fills', 'togo', 'to go']);
+const SKIP = 'skip';
+
+/** Group name -> app section: exact names first, then obvious drink words ("16oz Drafts", "Canned Beer"). */
+function sectionFor(name, inherited) {
+  const key = norm(name);
+  if (inherited === SKIP || HIDDEN_GROUPS.has(key)) return SKIP;
+  if (SECTION_FOR[key]) return SECTION_FOR[key];
+  if (inherited) return inherited;
+  if (/\b(drafts?|on tap|taps)\b/.test(key)) return 'draft';
+  if (/\b(bottles?|bottled|cans|canned)\b/.test(key)) return 'bottles';
+  if (/\bseltzers?\b/.test(key)) return 'seltzers';
+  return undefined;
+}
+
 export function mapToastMenu(menusPayload, outOfStockGuids = new Set()) {
   const items = [];
   const sizesOf = makeSizeLookup(menusPayload);
-  const pours = new Map(); // "draft|astra baja black" -> merged row
+  const drinks = new Map(); // "draft|miller lite" -> { row, variants: [{ label, price, soldOut }] }
+  const seenFood = new Set(); // "apps|<guid>" - same item listed twice in one section
 
-  const visitGroup = (group, inheritedSection) => {
-    const sectionId = SECTION_FOR[norm(group.name)] ?? inheritedSection;
-    if (sectionId) {
+  function addDrink(sectionId, item, baseName, variants) {
+    const name = cleanDrinkName(baseName);
+    const key = `${sectionId}|${name.toLowerCase()}`;
+    let entry = drinks.get(key);
+    if (!entry) {
+      entry = { row: { id: item.guid, toastGuid: item.guid, sectionId, name }, variants: [] };
+      drinks.set(key, entry);
+      items.push(entry.row); // keeps Toast's order
+    }
+    if (!entry.row.description && item.description?.trim()) entry.row.description = item.description.trim();
+    for (const v of variants) {
+      // First listing of a size wins (a happy hour menu repeating the beer won't double it).
+      if (!entry.variants.some((e) => e.label === v.label)) entry.variants.push(v);
+    }
+  }
+
+  const visitGroup = (group, inheritedSection, inheritedSize) => {
+    const sectionId = sectionFor(group.name, inheritedSection);
+    const sizeHere = groupSize(group.name) ?? inheritedSize;
+    if (sectionId && sectionId !== SKIP) {
       for (const item of group.menuItems ?? []) {
         if (!isShown(item, sectionId)) continue;
         const name = item.name.trim();
         const soldOut = outOfStockGuids.has(item.guid);
+        const price = priceOf(item);
 
-        // Separate items per pour size -> one row per beer.
-        const split = sectionId === 'draft' && priceOf(item) !== undefined ? splitSize(name) : null;
-        if (split) {
-          const key = `${sectionId}|${split.base.toLowerCase()}`;
-          let row = pours.get(key);
-          if (!row) {
-            row = { id: item.guid, toastGuid: item.guid, sectionId, name: split.base, sizes: [], soldSizes: 0, totalSizes: 0 };
-            pours.set(key, row);
-            items.push(row); // keeps Toast's order
+        if (IN_HOUSE_SECTIONS.has(sectionId)) {
+          const toastSizes = sizesOf(item);
+          if (toastSizes) {
+            addDrink(sectionId, item, name, toastSizes.map((s) => ({ ...s, soldOut })));
+            continue;
           }
-          row.totalSizes++;
-          if (soldOut) row.soldSizes++;
-          else row.sizes.push({ label: split.size, price: priceOf(item) });
-          if (!row.description && item.description?.trim()) row.description = item.description.trim();
+          const split = price !== undefined ? splitSize(name) : null;
+          const label = split?.size ?? sizeHere ?? '';
+          addDrink(sectionId, item, split?.base ?? name, [{ label, price, soldOut }]);
           continue;
         }
 
+        const seenKey = `${sectionId}|${item.guid}`;
+        if (seenFood.has(seenKey)) continue;
+        seenFood.add(seenKey);
         items.push({
           id: item.guid,
           toastGuid: item.guid,
           sectionId,
           name,
           description: item.description?.trim() || undefined,
-          price: priceOf(item),
+          price,
           sizes: sizesOf(item) ?? undefined,
           soldOut: soldOut || undefined,
         });
       }
     }
-    for (const child of group.menuGroups ?? []) visitGroup(child, sectionId);
+    for (const child of group.menuGroups ?? []) visitGroup(child, sectionId, sizeHere);
   };
 
   for (const menu of menusPayload.menus ?? []) {
-    const menuSection = SECTION_FOR[norm(menu.name)]; // e.g. "LENT MENU" with items directly under it
-    for (const group of menu.menuGroups ?? []) visitGroup(group, menuSection);
+    // e.g. "LENT MENU" with items directly under it; a hidden menu (NICOTINE) hides everything in it.
+    const menuSection = HIDDEN_GROUPS.has(norm(menu.name)) ? SKIP : SECTION_FOR[norm(menu.name)];
+    for (const group of menu.menuGroups ?? []) visitGroup(group, menuSection, undefined);
   }
 
-  // Finish merged pour rows: sort sizes small -> large; sold out only when every size is.
-  for (const row of pours.values()) {
-    row.sizes.sort((a, b) => sizeOrder(a.label) - sizeOrder(b.label));
-    row.soldOut = row.soldSizes === row.totalSizes || undefined;
-    delete row.soldSizes;
-    delete row.totalSizes;
-    if (row.sizes.length === 0) delete row.sizes;
+  // Finish drink rows: one plain price, or sizes small -> large. Sold-out sizes drop off;
+  // the drink is "Sold Out" only when every size is.
+  for (const { row, variants } of drinks.values()) {
+    const available = variants.filter((v) => !v.soldOut && v.price !== undefined);
+    row.soldOut = available.length === 0 || undefined;
+    const shown = available.length ? available : variants;
+    if (shown.length === 1 && !shown[0].label) {
+      row.price = shown[0].price;
+    } else {
+      row.sizes = shown
+        .filter((v) => v.price !== undefined)
+        .sort((a, b) => sizeOrder(a.label) - sizeOrder(b.label))
+        .map(({ label, price }) => ({ label, price }));
+      if (row.sizes.length === 0) delete row.sizes;
+    }
   }
   return items;
 }
@@ -222,12 +277,20 @@ export function mapToastMenu(menusPayload, outOfStockGuids = new Set()) {
 export function listToastGroups(menusPayload) {
   const rows = [];
   const visit = (menuName, group, inherited, depth) => {
-    const mappedTo = SECTION_FOR[norm(group.name)] ?? inherited ?? null;
-    rows.push({ menu: menuName, group: `${'  '.repeat(depth)}${group.name}`, items: (group.menuItems ?? []).length, mappedTo });
-    for (const child of group.menuGroups ?? []) visit(menuName, child, mappedTo ?? undefined, depth + 1);
+    const section = sectionFor(group.name, inherited);
+    const size = groupSize(group.name);
+    rows.push({
+      menu: menuName,
+      group: `${'  '.repeat(depth)}${group.name}`,
+      items: (group.menuItems ?? []).length,
+      mappedTo: section === SKIP ? 'hidden' : section ?? null,
+      ...(size ? { size } : {}),
+    });
+    for (const child of group.menuGroups ?? []) visit(menuName, child, section, depth + 1);
   };
   for (const menu of menusPayload.menus ?? []) {
-    for (const group of menu.menuGroups ?? []) visit(menu.name, group, SECTION_FOR[norm(menu.name)], 0);
+    const menuSection = HIDDEN_GROUPS.has(norm(menu.name)) ? SKIP : SECTION_FOR[norm(menu.name)];
+    for (const group of menu.menuGroups ?? []) visit(menu.name, group, menuSection, 0);
   }
   return rows;
 }
@@ -236,6 +299,34 @@ export function listToastGroups(menusPayload) {
 
 export async function fetchToastGroups() {
   return listToastGroups(await toastGet(requireConfig(), '/menus/v2/menus'));
+}
+
+// ---------------- Cache ----------------
+
+const MENU_TTL_MS = 5 * 60_000;
+let menuCache = null; // { at, body }
+let inflight = null;
+
+/** Toast menu, cached 5 minutes; keeps serving the last good copy if Toast is down. */
+export async function getCachedMenu() {
+  if (menuCache && Date.now() - menuCache.at < MENU_TTL_MS) return menuCache.body;
+  inflight ??= fetchToastMenu()
+    .then((body) => {
+      menuCache = { at: Date.now(), body };
+      return body;
+    })
+    .finally(() => {
+      inflight = null;
+    });
+  try {
+    return await inflight;
+  } catch (e) {
+    if (menuCache) {
+      console.warn('[menu] Toast refresh failed, serving cached menu:', e.message);
+      return { ...menuCache.body, stale: true };
+    }
+    throw e;
+  }
 }
 
 export async function fetchToastMenu() {

@@ -13,7 +13,9 @@
 import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import { adminEnabled, checkPassword, issueToken, loginAllowed, recordFailure, verifyToken } from './auth.mjs';
+import { MENU_SECTION_IDS, MENU_SECTIONS, withBase } from './menuOverrides.mjs';
 import { upcomingAutoGames } from './schedule.mjs';
+import { getCachedMenu, ToastConfigError } from './toastMenu.mjs';
 import { getContent, storageIsPersistent, update } from './store.mjs';
 
 const BAR_TZ = 'America/New_York';
@@ -88,6 +90,25 @@ const TEAMS = ['bengals', 'bearcats', 'reds', 'fcc'];
 const POLL_CATEGORIES = ['food', 'drinks', 'events', 'debates'];
 
 const validators = {
+  menuOverrides(v) {
+    const entries = Object.entries(v?.items ?? {});
+    if (entries.length > 1000) fail('Too many menu edits');
+    const items = {};
+    for (const [key, o] of entries) {
+      if (typeof key !== 'string' || key.length > 160 || !key.includes('|')) continue;
+      const name = str(o?.name, 'Item name', 80, { required: false });
+      const description = str(o?.description, 'Description', 600, { required: false });
+      const hidden = Boolean(o?.hidden);
+      const noDescription = Boolean(o?.noDescription);
+      // Only keep items that actually have an edit.
+      if (name || description || hidden || noDescription) {
+        items[key] = { ...(name && { name }), ...(description && { description }), ...(hidden && { hidden }), ...(noDescription && { noDescription }) };
+      }
+    }
+    const hiddenSections = [...new Set(list(v?.hiddenSections ?? [], 'Hidden sections', 50).filter((s) => MENU_SECTION_IDS.includes(s)))];
+    return { items, hiddenSections };
+  },
+
   maintenance(v) {
     return {
       enabled: Boolean(v?.enabled),
@@ -334,7 +355,19 @@ export async function handleContentApi(req, res, path) {
         return send(res, 200, { ...c, polls: c.polls.map((p) => pollView(p, c)), voters: undefined, storageIsPersistent, autoGames }), true;
       }
 
-      const section = /^\/api\/admin\/(maintenance|settings|flashDeals|polls|gamedaySettings|gameday|comingSoon|showcase)$/.exec(path)?.[1];
+      if (path === '/api/admin/menu' && req.method === 'GET') {
+        // The live Toast menu before admin edits, plus the edits, for the Menu tab.
+        try {
+          const menu = await getCachedMenu();
+          const items = withBase(menu.items).map(({ key, sectionId, name, description, price, sizes, soldOut }) => ({ key, sectionId, name, description, price, sizes, soldOut }));
+          return send(res, 200, { sections: MENU_SECTIONS, items, overrides: c.menuOverrides, stale: Boolean(menu.stale) }), true;
+        } catch (e) {
+          console.error('[admin/menu]', e.message);
+          throw new HttpError(503, e instanceof ToastConfigError ? 'Connect Toast first: add your Toast variables in Railway, then come back.' : 'Couldn’t reach Toast right now. Try again in a minute.');
+        }
+      }
+
+      const section = /^\/api\/admin\/(menuOverrides|maintenance|settings|flashDeals|polls|gamedaySettings|gameday|comingSoon|showcase)$/.exec(path)?.[1];
       if (section && req.method === 'PUT') {
         const clean = validators[section](await readJson(req));
         await update((draft) => {

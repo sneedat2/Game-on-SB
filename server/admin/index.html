@@ -38,6 +38,9 @@
   .votes { color:var(--muted); font-size:13px; text-align:right; }
   .login { max-width:360px; margin:60px auto; }
   .muted { color:var(--muted); }
+  .menu-item { border-top:1px solid var(--line); padding:12px 0 4px; }
+  .hidden-item { opacity:.5; }
+  .edited { color:var(--brand); font-size:12px; font-weight:700; }
   .banner.closed { background:#3a1111; border-color:var(--danger); color:#fca5a5; }
   button.closed { background:var(--danger); color:#fff; }
   .toast { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--brand); color:#0A0A0A; font-weight:700; padding:10px 16px; border-radius:10px; box-shadow:0 6px 24px rgba(0,0,0,.5); z-index:10; }
@@ -119,6 +122,7 @@
         content[section] = res[section];
         msg.className = 'msg ok'; msg.textContent = 'Saved ✓ - live in the app within a minute.';
         if (section === 'polls') { render(); toast('Polls saved ✓ - live in the app within a minute.'); } // redraw picks up new ids
+        if (section === 'menuOverrides' && menuData) menuData.overrides = res.menuOverrides;
         if (section === 'maintenance') { render(); toast(res.maintenance.enabled ? 'App is now CLOSED to guests' : 'App is OPEN ✓'); }
       } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
       finally { btn.disabled = false; }
@@ -310,7 +314,93 @@
     ],
   });
 
-  const TABS = { status: ['App Status', statusSection], hours: ['Hours & Happy Hour', hoursSection], deals: ['6 PM Surprise', dealsSection], polls: ['Polls', pollsSection], gameday: ['Gameday', gamedaySection], soon: ['Coming Soon', comingSoonSection], showcase: ['We Made It', showcaseSection] };
+  // ---------- Menu (edits on top of the live Toast menu) ----------
+  let menuData = null; // { sections, items, overrides } from /api/admin/menu
+
+  function menuSection() {
+    const wrap = h('div', {}, h('p', { class: 'muted' }, 'Loading your Toast menu…'));
+    (async () => {
+      try {
+        menuData ??= await api('/api/admin/menu');
+        drawMenuEditor(wrap);
+      } catch (e) { wrap.replaceChildren(h('p', { class: 'msg err' }, e.message)); }
+    })();
+    return [
+      h('h2', {}, 'Menu'),
+      h('p', { class: 'hint' }, 'Your Toast menu as guests see it in the app. Rename items, change descriptions, or hide items and whole sections. Prices and sold-out status still come from Toast automatically.'),
+      wrap,
+    ];
+  }
+
+  function drawMenuEditor(wrap) {
+    const ov = structuredClone(menuData.overrides ?? {});
+    ov.items ??= {};
+    ov.hiddenSections ??= [];
+    let only = 'all';
+    let query = '';
+    const money = (n) => `$${Number(n).toFixed(2)}`;
+    const priceText = (i) => (i.sizes?.length ? i.sizes.map((s) => `${s.label} ${money(s.price)}`).join(' · ') : typeof i.price === 'number' ? money(i.price) : '');
+    const list = h('div');
+
+    function itemEditor(i) {
+      const e = ov.items[i.key] ?? {};
+      const set = (patch) => { ov.items[i.key] = { ...(ov.items[i.key] ?? {}), ...patch }; };
+      const edited = Boolean(e.name || e.description || e.hidden || e.noDescription);
+      const descValue = e.noDescription ? '' : e.description ?? i.description ?? '';
+      return h('div', { class: `menu-item${e.hidden ? ' hidden-item' : ''}` },
+        h('div', { class: 'row', style: 'margin-bottom:2px' },
+          h('strong', { style: 'flex:1' }, i.name, i.soldOut ? ' · sold out' : '', edited ? h('span', { class: 'edited' }, ' edited') : ''),
+          h('span', { class: 'muted' }, priceText(i))),
+        h('div', { class: 'row' }, h('label', {}, 'Name in the app', h('input', { value: e.name ?? '', placeholder: i.name, maxlength: 80, oninput: (ev) => set({ name: ev.target.value }) }))),
+        h('div', { class: 'row' }, h('label', {}, 'Description (clear it to show none)', h('textarea', {
+          value: descValue, placeholder: 'No description - type one here', maxlength: 600,
+          oninput: (ev) => {
+            const v = ev.target.value;
+            set(v.trim() ? { description: v, noDescription: false } : { description: '', noDescription: Boolean(i.description) });
+          },
+        }))),
+        h('div', { class: 'row' },
+          h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: e.hidden, onchange: (ev) => { set({ hidden: ev.target.checked }); draw(); } }), 'Hide this item'),
+          h('span', { style: 'flex:1' }),
+          edited ? h('button', { class: 'ghost small', onclick: () => { delete ov.items[i.key]; draw(); } }, 'Reset to Toast') : ''));
+    }
+
+    function draw() {
+      const q = query.trim().toLowerCase();
+      list.replaceChildren(...menuData.sections
+        .filter((s) => only === 'all' || s.id === only)
+        .map((s) => {
+          const items = menuData.items.filter((i) => i.sectionId === s.id && (!q || i.name.toLowerCase().includes(q)));
+          if (items.length === 0) return null;
+          const hidden = ov.hiddenSections.includes(s.id);
+          return h('div', { class: 'card' },
+            h('div', { class: 'row' },
+              h('strong', { style: 'flex:1;font-size:18px' }, s.title),
+              h('span', { class: 'muted' }, s.tab),
+              h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: hidden, onchange: (ev) => {
+                ov.hiddenSections = ev.target.checked ? [...ov.hiddenSections, s.id] : ov.hiddenSections.filter((x) => x !== s.id);
+                draw();
+              } }), 'Hide whole section')),
+            hidden ? h('p', { class: 'muted' }, 'This whole section is hidden from the app.') : items.map(itemEditor));
+        })
+        .filter(Boolean));
+      if (!list.children.length) list.append(h('p', { class: 'muted' }, 'No items match.'));
+    }
+
+    draw();
+    wrap.replaceChildren(
+      menuData.stale ? h('div', { class: 'banner' }, 'Toast didn’t answer just now - showing the last menu we got.') : '',
+      h('div', { class: 'row' },
+        h('label', {}, 'Section', h('select', { onchange: (ev) => { only = ev.target.value; draw(); } },
+          h('option', { value: 'all' }, 'All sections'),
+          menuData.sections.filter((s) => menuData.items.some((i) => i.sectionId === s.id)).map((s) => h('option', { value: s.id }, `${s.tab} · ${s.title}`)))),
+        h('label', {}, 'Search', h('input', { placeholder: 'e.g. Miller Lite', oninput: (ev) => { query = ev.target.value; draw(); } }))),
+      list,
+      saveBar('menuOverrides', () => ov),
+    );
+  }
+
+  const TABS = { status: ['App Status', statusSection], menu: ['Menu', menuSection], hours: ['Hours & Happy Hour', hoursSection], deals: ['6 PM Surprise', dealsSection], polls: ['Polls', pollsSection], gameday: ['Gameday', gamedaySection], soon: ['Coming Soon', comingSoonSection], showcase: ['We Made It', showcaseSection] };
 
   function render() {
     headerRight.replaceChildren(h('button', { class: 'small', onclick: logout }, 'Sign out'));

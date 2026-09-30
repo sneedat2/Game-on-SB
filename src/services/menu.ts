@@ -21,9 +21,12 @@ async function fetchLiveItems(): Promise<MenuItem[] | null> {
   }
 }
 
-/** Adds website descriptions where Toast has none (Toast's own description wins). */
+/**
+ * Adds website descriptions where none was given. The live menu already arrives with admin edits
+ * and descriptions applied; an empty string there means "no description" on purpose.
+ */
 const withDescriptions = (items: MenuItem[]) =>
-  items.map((i) => (i.description ? i : { ...i, description: descriptionFor(i.name) }));
+  items.map((i) => (i.description !== undefined ? i : { ...i, description: descriptionFor(i.name) }));
 
 export const menuService: MenuService = {
   async getMenu() {
