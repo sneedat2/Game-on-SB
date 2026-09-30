@@ -52,7 +52,10 @@ src/
 supabase/
   migrations/0001_init.sql   tables, RLS, RPCs (cast_vote, issue_redemption_code, redeem_code)
   seed.sql
-  functions/toast-proxy      Toast menu + loyalty lookup gateway
+  functions/toast-proxy      Toast loyalty lookup (not connected yet - see below)
+server/
+  index.mjs            Railway web server: serves dist/ + GET /api/menu, /api/health
+  toastMenu.mjs        Toast login, menu + stock fetch, mapping to app sections
   functions/flash-deal-push  6 PM Expo push blast (pg_cron)
 ```
 
@@ -81,15 +84,19 @@ the live implementation, so going live changes no UI code.
 - `flash_deals` rows are invisible to guests until 6 PM bar time, so the surprise can't be read early.
 - Coupon codes are generated server-side, expire after 10 minutes, and single-use coupons are
   enforced in `issue_redemption_code` / `redeem_code`.
-- Toast credentials live only in Edge Function secrets. `flash-deal-push` requires the
+- Toast credentials live only in Railway Variables (server) — never in the app bundle. `flash-deal-push` requires the
   service-role key, so app users can't trigger a push blast.
 
 ## ⚠️ Toast integration — read before promising "check your Toast points"
 
 - **Online ordering** works today: it opens `https://order.toasttab.com/online/game-on-bar-and-grill`.
-- **Menu sync** uses Toast's Menus API (`/menus/v2/menus`) with machine-client auth. It needs Toast
-  API credentials for this restaurant (Toast developer portal / Partner Connect). Adjust `SECTION_MAP`
-  in `toast-proxy` to the bar's real menu groups.
+- **Live menu**: `server/index.mjs` (the Railway web server) exposes `GET /api/menu`, which reads
+  Toast's Menus API (`/menus/v2/menus`) and sold-out status (`/stock/v1/inventory`), cached 5 min.
+  Set these in **Railway → Variables**: `TOAST_API_HOST`, `TOAST_CLIENT_ID`, `TOAST_CLIENT_SECRET`,
+  `TOAST_RESTAURANT_GUID`. Toast group → app section matching is `SECTION_FOR` in
+  `server/toastMenu.mjs`. The website finds `/api/menu` on its own domain; the phone app needs
+  `EXPO_PUBLIC_MENU_API_URL=https://<your-railway-domain>/api/menu`. If the live menu is unavailable,
+  the app falls back to the copy in `src/data/menu.ts`.
 - **Loyalty lookup is not wired**: Toast's documented loyalty integration API is *inbound*. Toast
   calls a loyalty provider's service; I found no documented endpoint for reading a guest's native
   Toast Loyalty balance. Two options:

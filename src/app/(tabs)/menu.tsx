@@ -93,10 +93,11 @@ export default function MenuScreen() {
     }
   }
 
-  const tabSections = useMemo(
-    () => (menu.data && view !== 'soon' ? menu.data.sections.filter((s) => sectionKindsFor[view].includes(s.kind)) : []),
-    [menu.data, view],
-  );
+  const tabSections = useMemo(() => {
+    if (!menu.data || view === 'soon') return [];
+    const withItems = new Set(menu.data.items.map((i) => i.sectionId));
+    return menu.data.sections.filter((s) => sectionKindsFor[view].includes(s.kind) && withItems.has(s.id));
+  }, [menu.data, view]);
 
   const grouped = useMemo(() => {
     if (!menu.data) return [];
@@ -137,6 +138,13 @@ export default function MenuScreen() {
                 <Chip key={s.id} label={s.title} active={section === s.id} onPress={() => setSection(s.id)} />
               ))}
             </ScrollView>
+          ) : null}
+
+          {menu.data?.live ? (
+            <View className="flex-row items-center gap-1.5">
+              <View className="h-2 w-2 rounded-full bg-turf" />
+              <Text className="text-xs text-muted">Live menu · prices & sold-out items update automatically</Text>
+            </View>
           ) : null}
 
           {view === 'bar' ? (
