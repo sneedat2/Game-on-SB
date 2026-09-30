@@ -14,10 +14,11 @@ const tagTone = (t: string) => (t === 'Local' ? 'turf' : t === 'Fan Pick' || t =
 
 function MenuRow({ item, last }: { item: MenuItem; last: boolean }) {
   return (
-    <View className={`flex-row gap-3 py-3 ${last ? '' : 'border-b border-ink-600'}`}>
+    <View className={`flex-row gap-3 py-3 ${last ? '' : 'border-b border-ink-600'} ${item.soldOut ? 'opacity-50' : ''}`}>
       <View className="flex-1">
         <View className="flex-row flex-wrap items-center gap-1.5">
           <Text className="text-base font-bold text-chalk">{item.name}</Text>
+          {item.soldOut ? <Tag label="Sold Out" tone="neutral" /> : null}
           {item.tags?.map((t) => <Tag key={t} label={t} tone={tagTone(t)} />)}
         </View>
         {item.description ? <Text className="mt-0.5 text-sm text-muted">{item.description}</Text> : null}
@@ -108,7 +109,7 @@ export default function MenuScreen() {
   return (
     <Screen
       title="Menu"
-      subtitle="Apps, wings & stadium pours"
+      subtitle="Apps, wings & growler fills"
       refreshing={(menu.loading && Boolean(menu.data)) || (soon.loading && Boolean(soon.data))}
       onRefresh={() => {
         void menu.reload();

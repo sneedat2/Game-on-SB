@@ -48,7 +48,7 @@ export default function InfoScreen() {
       <Card>
         <View className="mb-2 flex-row items-center gap-2">
           <Clock size={16} color={colors.gold} />
-          <Text className="text-lg font-extrabold text-chalk">Hours</Text>
+          <Text className="text-lg font-extrabold text-chalk">Kitchen Hours</Text>
         </View>
         {BAR.hours.map((h) => (
           <View key={h.days} className="flex-row justify-between py-1.5">

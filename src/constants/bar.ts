@@ -16,11 +16,10 @@ export const BAR = {
     // TODO: replace with the bar's real Instagram profile; falls back to a search until confirmed.
     instagram: 'https://www.instagram.com/explore/search/keyword/?q=game%20on%20bar%20cincinnati',
   },
+  // Kitchen & online ordering hours, from the Toast ordering page (2026-09-30).
   hours: [
-    // TODO: confirm real hours with the bar.
-    { days: 'Mon–Thu', open: '11 AM', close: '12 AM' },
-    { days: 'Fri–Sat', open: '11 AM', close: '2:30 AM' },
-    { days: 'Sun', open: '11 AM', close: '12 AM' },
+    { days: 'Mon–Sat', open: '11 AM', close: '9:30 PM' },
+    { days: 'Sun', open: '11 AM', close: '9 PM' },
   ],
 } as const;
 

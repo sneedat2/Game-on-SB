@@ -25,7 +25,7 @@ All-Star member; any 10-digit number returns a generated guest.
 | Tab | Features |
 | --- | --- |
 | **Home** | Gameday countdown banner (Bengals / Bearcats / Reds / FC Cincinnati) with bucket & souvenir-cup specials · **6 PM Surprise** widget (countdown → 1-hour unlock → "next unlock" state, alert toggle) · quick actions · featured poll |
-| **Menu** | **Food** tab: Appetizers → Traditional Wings → Boneless Wings → Entrées → Sandwiches → Salads & Soups → Kids Meals → Sides → Beverages · **Bar 21+** tab: draft (16 oz / 22 oz stadium pours), bottles & cans, seltzers · **Coming Soon** new food & drinks (incl. poll winners) · Toast online ordering in an in-app browser |
+| **Menu** | The real Game On menu (`src/data/menu.ts`, copied from Toast). **Food** tab: Appetizers → Traditional Wings → Boneless Wings → Entrées → Sandwiches → Salads & Soups → Kids Meals → Sides → Seasonal → Lent → Beverages · **Bar 21+** tab: Summer Sips, Growler Fills (32 / 64 oz), To-Go Cases · **Coming Soon** new food & drinks (incl. poll winners) · Toast online ordering in an in-app browser |
 | **Polls** | "Game On Wants to Know" feed with category filters, animated result bars on vote, **"We Made It Happen"** showcase of winners |
 | **Rewards** | Phone-number loyalty lookup (points, tier, progress, redeemable rewards) · coupon stash with timed, single-use QR codes + short fallback code |
 | **Info** | Address, Call Bar, Directions, hours, ordering & social links |
@@ -104,8 +104,10 @@ the live implementation, so going live changes no UI code.
 
 ## Before launch checklist
 
-- [ ] Replace sample menu, prices and Coming Soon items (`src/data/mock/*`) or go live
-- [ ] Confirm real **hours** (`src/constants/bar.ts` — currently placeholders)
+- [x] Real menu & prices from Toast (`src/data/menu.ts`) — re-copy when Toast changes, until the live sync is connected
+- [ ] Confirm growler prices that looked like Toast typos and were left out: 32 oz 312 ($0.01), 32 oz Bud Light ($20), 32 oz Psychopathy ($58)
+- [ ] Replace sample Coming Soon items (`src/data/mock/menu.ts`)
+- [x] Kitchen hours from Toast (`src/constants/bar.ts`) — add bar hours if they differ
 - [x] Facebook: https://www.facebook.com/gameonwestside
 - [ ] Set real **Instagram** URL (`BAR.social.instagram` — currently a search fallback)
 - [ ] App icon / splash (`assets/`), bundle ids in `app.json`

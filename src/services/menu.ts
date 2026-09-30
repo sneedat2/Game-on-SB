@@ -1,5 +1,6 @@
 import type { ComingSoonItem, MenuItem, MenuSection } from '@/types';
-import { comingSoon, menuItems, menuSections } from '@/data/mock/menu';
+import { menuItems, menuSections } from '@/data/menu';
+import { comingSoon } from '@/data/mock/menu';
 import { isLive } from './config';
 import { mockDelay } from './storage';
 import { invokeFunction, supabase } from './supabase';

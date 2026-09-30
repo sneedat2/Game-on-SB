@@ -6,7 +6,7 @@ import { openOnlineOrdering } from '@/services/ordering';
 
 const actions: { label: string; icon: LucideIcon; onPress: () => void; primary?: boolean }[] = [
   { label: 'Order Online', icon: ShoppingBag, onPress: () => void openOnlineOrdering(), primary: true },
-  { label: 'View Tap List', icon: Beer, onPress: () => router.push({ pathname: '/menu', params: { view: 'bar', section: 'draft', t: String(Date.now()) } }) },
+  { label: 'View Tap List', icon: Beer, onPress: () => router.push({ pathname: '/menu', params: { view: 'bar', section: 'growlers', t: String(Date.now()) } }) },
   { label: 'Check Rewards', icon: Trophy, onPress: () => router.push('/rewards') },
   { label: "Today's Poll", icon: Vote, onPress: () => router.push('/polls') },
 ];

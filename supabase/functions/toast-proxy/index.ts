@@ -53,7 +53,7 @@ async function toastGet(path: string) {
   return res.json();
 }
 
-// Map Toast menu group names -> app sections. Adjust to match the bar's actual menu build in Toast.
+// Map Toast menu group names -> app sections (names as they appear on the bar's Toast ordering page).
 // Order here is the display order in the app; unmapped groups are skipped.
 // kind: 'food' | 'beverage' (non-alcoholic, Food tab) | 'alcohol' (Bar tab).
 const SECTION_MAP: Record<string, { id: string; kind: 'food' | 'beverage' | 'alcohol' }> = {
@@ -63,13 +63,16 @@ const SECTION_MAP: Record<string, { id: string; kind: 'food' | 'beverage' | 'alc
   entrees: { id: 'entrees', kind: 'food' },
   sandwiches: { id: 'sandwiches', kind: 'food' },
   burgers: { id: 'sandwiches', kind: 'food' },
-  'salads & soups': { id: 'soups-salads', kind: 'food' },
-  'kids meals': { id: 'kids', kind: 'food' },
+  'salad & soups': { id: 'soups-salads', kind: 'food' },
+  'kids meal': { id: 'kids', kind: 'food' },
   sides: { id: 'sides', kind: 'food' },
+  'seasonal menu items': { id: 'seasonal', kind: 'food' },
+  'lent menu': { id: 'lent', kind: 'food' },
   beverages: { id: 'beverages', kind: 'beverage' },
-  'draft beer': { id: 'draft', kind: 'alcohol' },
-  'bottles & cans': { id: 'bottles', kind: 'alcohol' },
-  seltzers: { id: 'seltzers', kind: 'alcohol' },
+  summer: { id: 'summer', kind: 'alcohol' },
+  'growler fill': { id: 'growlers', kind: 'alcohol' },
+  togo: { id: 'togo', kind: 'alcohol' },
+  // 'nicotine cans' intentionally unmapped - app stores restrict nicotine promotion.
 };
 const SECTION_ORDER = [...new Set(Object.values(SECTION_MAP).map((s) => s.id))];
 

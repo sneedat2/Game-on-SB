@@ -62,10 +62,12 @@ export type MenuSectionId =
   | 'soups-salads'
   | 'kids'
   | 'sides'
+  | 'seasonal'
+  | 'lent'
   | 'beverages'
-  | 'draft'
-  | 'bottles'
-  | 'seltzers';
+  | 'summer'
+  | 'growlers'
+  | 'togo';
 
 export interface MenuItem {
   id: string;
@@ -75,6 +77,7 @@ export interface MenuItem {
   price?: number;
   /** Items sold in sizes (draft pours, wing counts) list each size instead of a single price. */
   sizes?: { label: string; price: number }[];
+  soldOut?: boolean; // mirrors Toast's "OUT OF STOCK"
   tags?: string[]; // "Local", "Spicy", "New", "Fan Pick"
   toastGuid?: string; // Toast menu item GUID once synced from the POS
 }
