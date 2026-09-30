@@ -146,6 +146,18 @@ export function formatKickoff(iso: string): string {
   return kickoffFormatter.format(new Date(iso));
 }
 
+const gameDateFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: BAR.timeZone,
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+});
+
+/** "Sat, Oct 17" in bar time - for games whose kickoff time isn't set yet. */
+export function formatGameDate(iso: string): string {
+  return gameDateFormatter.format(new Date(iso));
+}
+
 /**
  * Builds a Date for a given bar-local wall time `daysFromNow` days out. Used by the mock data
  * so sample games/polls are always in the near future. DST edge cases are fine for mocks.

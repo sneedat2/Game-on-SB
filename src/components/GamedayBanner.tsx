@@ -4,7 +4,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { TEAMS } from '@/constants/bar';
 import { colors } from '@/constants/theme';
 import { useNow } from '@/hooks/useNow';
-import { formatKickoff, pad2, splitDuration } from '@/lib/time';
+import { formatGameDate, formatKickoff, pad2, splitDuration } from '@/lib/time';
 import type { GamedayEvent } from '@/types';
 
 const LIVE_WINDOW_MS = 4 * 3600_000;
@@ -54,13 +54,15 @@ export function GamedayBanner({ events }: { events: GamedayEvent[] }) {
         <View className="mt-1 flex-row items-center gap-1.5">
           <Tv size={13} color={colors.muted} />
           <Text className="text-sm text-muted">
-            {formatKickoff(event.startsAt)}
+            {event.timeTBA ? `${formatGameDate(event.startsAt)} · Time TBA` : formatKickoff(event.startsAt)}
             {event.broadcast ? ` · ${event.broadcast}` : ''}
           </Text>
         </View>
 
         {isLive ? (
           <Text className="mt-4 text-lg font-extrabold text-brand">Game’s on - grab a seat, specials are running!</Text>
+        ) : event.timeTBA ? (
+          <Text className="mt-4 text-base font-bold text-brand">Kickoff time to be announced - check back soon.</Text>
         ) : (
           <View className="mt-4 flex-row gap-2">
             <CountdownBlock value={String(t.days)} label="days" />
@@ -70,14 +72,16 @@ export function GamedayBanner({ events }: { events: GamedayEvent[] }) {
           </View>
         )}
 
-        <View className="mt-4 gap-1.5 rounded-2xl bg-ink-700 p-3">
-          {event.specials.map((s) => (
-            <View key={s} className="flex-row items-center gap-2">
-              <Beer size={14} color={colors.brand} />
-              <Text className="flex-1 text-sm font-semibold text-chalk">{s}</Text>
-            </View>
-          ))}
-        </View>
+        {event.specials.length > 0 ? (
+          <View className="mt-4 gap-1.5 rounded-2xl bg-ink-700 p-3">
+            {event.specials.map((s) => (
+              <View key={s} className="flex-row items-center gap-2">
+                <Beer size={14} color={colors.brand} />
+                <Text className="flex-1 text-sm font-semibold text-chalk">{s}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
       </View>
 
       {events.length > 1 ? (
@@ -91,7 +95,7 @@ export function GamedayBanner({ events }: { events: GamedayEvent[] }) {
                 className={`rounded-full px-3 py-1.5 ${active ? 'bg-brand' : 'bg-ink-700'}`}
               >
                 <Text className={`text-xs font-bold ${active ? 'text-ink' : 'text-chalk'}`}>
-                  {TEAMS[e.team].name} · {formatKickoff(e.startsAt).split(',')[0]}
+                  {TEAMS[e.team].name} · {formatGameDate(e.startsAt).replace(',', '')}
                 </Text>
               </Pressable>
             );

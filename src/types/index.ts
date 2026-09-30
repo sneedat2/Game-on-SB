@@ -9,6 +9,8 @@ export interface GamedayEvent {
   opponent: string;
   homeAway: 'home' | 'away';
   startsAt: string; // ISO timestamp
+  /** Date is set but kickoff time isn't announced yet (common for college football). */
+  timeTBA?: boolean;
   broadcast?: string;
   specials: string[]; // e.g. "$20 domestic buckets"
 }

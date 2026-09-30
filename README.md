@@ -69,6 +69,11 @@ the live implementation, so going live changes no UI code.
 
 ## Admin editor & tester lock (Railway)
 
+**Gameday schedules are automatic**: `server/schedule.mjs` pulls upcoming Bengals, Bearcats, Reds and
+FC Cincinnati games from ESPN's public (unofficial) schedule feed hourly; the admin sets specials per
+team and can add extra games/watch parties. Draft beer shows as one row per beer with each pour
+size and price (`server/toastMenu.mjs`, both Toast size setups supported).
+
 `https://<your-site>/admin` → **App Status** opens/closes the app: while closed, guests get a
 "Be right back" page (with your message) and a signed-in admin still sees the real app
 (`server/maintenance.mjs`). The admin also edits hours, happy hour, the 6 PM Surprise deals, polls (with live
