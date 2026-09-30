@@ -1,9 +1,10 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { Beer, ShoppingBag, UtensilsCrossed, Vote } from 'lucide-react-native';
+import { Beer, ChevronDown, ChevronUp, ShoppingBag, UtensilsCrossed, Vote } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Button, Card, Chip, ErrorState, LoadingState, Screen, Segmented, Tag } from '@/components/ui';
 import { colors } from '@/constants/theme';
+import { WING_SAUCES } from '@/data/menuDescriptions';
 import { useAsync } from '@/hooks/useAsync';
 import { menuService } from '@/services/menu';
 import { openOnlineOrdering } from '@/services/ordering';
@@ -12,16 +13,39 @@ import type { ComingSoonItem, MenuItem, MenuSection, MenuSectionId } from '@/typ
 const money = (n: number) => `$${n % 1 === 0 ? n : n.toFixed(2)}`;
 const tagTone = (t: string) => (t === 'Local' ? 'turf' : t === 'Fan Pick' || t === 'New' ? 'gold' : t === 'Spicy' ? 'brand' : 'neutral');
 
+// Descriptions longer than about three phone-width lines start collapsed with a "More" toggle.
+const LONG_DESCRIPTION = 130;
+const COLLAPSED_LINES = 3;
+
 function MenuRow({ item, last }: { item: MenuItem; last: boolean }) {
+  const [open, setOpen] = useState(false);
+  const long = (item.description?.length ?? 0) > LONG_DESCRIPTION;
   return (
-    <View className={`flex-row gap-3 py-3 ${last ? '' : 'border-b border-ink-600'} ${item.soldOut ? 'opacity-50' : ''}`}>
+    <Pressable
+      disabled={!long}
+      onPress={() => setOpen((o) => !o)}
+      accessibilityRole={long ? 'button' : undefined}
+      accessibilityState={long ? { expanded: open } : undefined}
+      accessibilityHint={long ? 'Shows the full description' : undefined}
+      className={`flex-row gap-3 py-3 ${last ? '' : 'border-b border-ink-600'} ${item.soldOut ? 'opacity-50' : ''}`}
+    >
       <View className="flex-1">
         <View className="flex-row flex-wrap items-center gap-1.5">
           <Text className="text-base font-bold text-chalk">{item.name}</Text>
           {item.soldOut ? <Tag label="Sold Out" tone="neutral" /> : null}
           {item.tags?.map((t) => <Tag key={t} label={t} tone={tagTone(t)} />)}
         </View>
-        {item.description ? <Text className="mt-0.5 text-sm text-muted">{item.description}</Text> : null}
+        {item.description ? (
+          <Text className="mt-0.5 text-sm text-muted" numberOfLines={long && !open ? COLLAPSED_LINES : undefined}>
+            {item.description}
+          </Text>
+        ) : null}
+        {long ? (
+          <View className="mt-1 flex-row items-center gap-0.5">
+            <Text className="text-xs font-bold text-brand">{open ? 'Less' : 'More'}</Text>
+            {open ? <ChevronUp size={14} color={colors.brand} /> : <ChevronDown size={14} color={colors.brand} />}
+          </View>
+        ) : null}
       </View>
       {item.sizes ? (
         <View className="items-end gap-0.5">
@@ -34,6 +58,41 @@ function MenuRow({ item, last }: { item: MenuItem; last: boolean }) {
         </View>
       ) : item.price !== undefined ? (
         <Text className="text-base font-bold text-chalk">{money(item.price)}</Text>
+      ) : null}
+    </Pressable>
+  );
+}
+
+/** Dropdown with the wing sauces & dry rubs from the website menu. */
+function WingSauces() {
+  const [open, setOpen] = useState(false);
+  const groups: [string, string[]][] = [
+    ['New', WING_SAUCES.new],
+    ['Less hot', WING_SAUCES.lessHot],
+    ['Medium', WING_SAUCES.medium],
+    ['More hot', WING_SAUCES.moreHot],
+    ['Dry rubs', WING_SAUCES.dryRubs],
+  ];
+  return (
+    <View className="mt-2 rounded-xl bg-ink-700">
+      <Pressable
+        onPress={() => setOpen((o) => !o)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        className="flex-row items-center justify-between px-3 py-2.5"
+      >
+        <Text className="font-bold text-brand">Sauces & Dry Rubs</Text>
+        {open ? <ChevronUp size={18} color={colors.brand} /> : <ChevronDown size={18} color={colors.brand} />}
+      </Pressable>
+      {open ? (
+        <View className="gap-2 px-3 pb-3">
+          {groups.map(([label, names]) => (
+            <View key={label}>
+              <Text className="text-[11px] font-bold uppercase tracking-wide text-muted">{label}</Text>
+              <Text className="text-sm text-chalk">{names.join(' · ')}</Text>
+            </View>
+          ))}
+        </View>
       ) : null}
     </View>
   );
@@ -169,6 +228,7 @@ export default function MenuScreen() {
               <Card key={s.id}>
                 <Text className="mb-1 text-xl font-black text-chalk">{s.title}</Text>
                 {s.blurb ? <Text className="text-sm text-brand-light">{s.blurb}</Text> : null}
+                {s.id === 'wings-traditional' || s.id === 'wings-boneless' ? <WingSauces /> : null}
                 {items.map((item, i) => (
                   <MenuRow key={item.id} item={item} last={i === items.length - 1} />
                 ))}

@@ -1,5 +1,6 @@
 import type { ComingSoonItem, MenuItem, MenuSection } from '@/types';
 import { menuItems, menuSections } from '@/data/menu';
+import { descriptionFor } from '@/data/menuDescriptions';
 import { comingSoon } from '@/data/mock/menu';
 import { apiConfigured, apiFetch } from './api';
 import { loadContent } from './content';
@@ -20,13 +21,17 @@ async function fetchLiveItems(): Promise<MenuItem[] | null> {
   }
 }
 
+/** Adds website descriptions where Toast has none (Toast's own description wins). */
+const withDescriptions = (items: MenuItem[]) =>
+  items.map((i) => (i.description ? i : { ...i, description: descriptionFor(i.name) }));
+
 export const menuService: MenuService = {
   async getMenu() {
     const live = await fetchLiveItems();
-    if (live) return { sections: menuSections, items: live, live: true };
+    if (live) return { sections: menuSections, items: withDescriptions(live), live: true };
     // Fallback: the menu copied from Toast into src/data/menu.ts.
     if (!apiConfigured) await mockDelay();
-    return { sections: menuSections, items: menuItems, live: false };
+    return { sections: menuSections, items: withDescriptions(menuItems), live: false };
   },
 
   // Edited at /admin → Coming Soon (Toast has no concept of "not on the menu yet").

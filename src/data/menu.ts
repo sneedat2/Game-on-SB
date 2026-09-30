@@ -4,12 +4,13 @@
 // Not included: NICOTINE (app-store rules restrict promoting nicotine products), and the
 // discontinued Summer, Growler Fill and To-Go sections.
 import type { MenuItem, MenuSection, MenuSectionId } from '@/types';
+import { WINGS_BONELESS, WINGS_TRADITIONAL } from './menuDescriptions';
 
 // Display order within each Menu tab: Food tab = food then Beverages; Bar tab = alcohol.
 export const menuSections: MenuSection[] = [
   { id: 'apps', title: 'Appetizers', kind: 'food' },
-  { id: 'wings-traditional', title: 'Traditional Wings', kind: 'food' },
-  { id: 'wings-boneless', title: 'Boneless Wings', kind: 'food' },
+  { id: 'wings-traditional', title: 'Traditional Wings', kind: 'food', blurb: WINGS_TRADITIONAL },
+  { id: 'wings-boneless', title: 'Boneless Wings', kind: 'food', blurb: WINGS_BONELESS },
   { id: 'entrees', title: 'Entrées', kind: 'food' },
   { id: 'sandwiches', title: 'Sandwiches', kind: 'food' },
   { id: 'soups-salads', title: 'Salads & Soups', kind: 'food' },
