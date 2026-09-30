@@ -21,6 +21,7 @@ export function sendMaintenance(res, path) {
   res.writeHead(503, { ...headers, 'Content-Type': 'text/html; charset=utf-8' });
   res.end(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="60"><!-- re-check every minute; the app returns as soon as it's reopened -->
 <title>Game On · Be right back</title>
 <style>
   body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0A0A0A;color:#F5F5F5;font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:24px;box-sizing:border-box}

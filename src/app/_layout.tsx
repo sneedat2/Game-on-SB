@@ -6,7 +6,9 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { AdminPreviewBanner, ClosedScreen } from '@/components/ClosedScreen';
 import { colors } from '@/constants/theme';
+import { useAppStatus } from '@/services/appStatus';
 import { loadContent } from '@/services/content';
 import { flashAlertsEnabled, initNotifications, registerPushToken, scheduleFlashDealAlerts } from '@/services/notifications';
 
@@ -33,11 +35,34 @@ function useNotificationBootstrap() {
   }, []);
 }
 
+const STATUS_CHECK_MS = 60_000;
+
+/** Re-checks open/closed every minute so an already-open app follows the admin switch. */
+function useAppStatusPolling() {
+  useEffect(() => {
+    const timer = setInterval(() => void loadContent(true).catch(() => null), STATUS_CHECK_MS);
+    return () => clearInterval(timer);
+  }, []);
+}
+
 export default function RootLayout() {
   useNotificationBootstrap();
+  useAppStatusPolling();
+  const appStatus = useAppStatus();
+
+  if (appStatus.closed) {
+    return (
+      <SafeAreaProvider>
+        <StatusBar style="light" />
+        <ClosedScreen message={appStatus.message} />
+      </SafeAreaProvider>
+    );
+  }
+
   return (
     <SafeAreaProvider>
       <StatusBar style="light" />
+      {appStatus.adminPreview ? <AdminPreviewBanner /> : null}
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: colors.ink900 },

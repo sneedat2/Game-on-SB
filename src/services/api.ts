@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { markClosed, markOpen } from './appStatus';
 import { randomId, readJSON, writeJSON } from './storage';
 
 // Our own server (server/index.mjs on Railway): live Toast menu + admin-edited content.
@@ -37,6 +38,11 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   }
   if (!res.headers.get('content-type')?.includes('application/json')) throw new ApiUnavailable('Not our API');
   const body = await res.json();
+  if (res.status === 503 && body?.error === 'maintenance') {
+    markClosed(body.message);
+    throw new ApiError(body.message ?? 'Closed for maintenance', 503);
+  }
+  markOpen(res.headers.get('x-maintenance-preview') === '1');
   if (!res.ok) throw new ApiError(body?.error ?? `Request failed (${res.status})`, res.status);
   return body as T;
 }

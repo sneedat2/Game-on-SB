@@ -78,7 +78,11 @@ const server = createServer(async (req, res) => {
   const path = new URL(req.url ?? '/', 'http://localhost').pathname;
   if (!passesSiteLock(req, res, path)) return;
   if (siteLocked()) res.setHeader('X-Robots-Tag', 'noindex');
-  if (maintenanceOn() && !bypassesMaintenance(path) && !hasAdminCookie(req)) return sendMaintenance(res, path);
+  if (maintenanceOn() && !bypassesMaintenance(path)) {
+    // A signed-in admin still gets the app, flagged so it can show "closed to guests".
+    if (hasAdminCookie(req)) res.setHeader('X-Maintenance-Preview', '1');
+    else return sendMaintenance(res, path);
+  }
 
   if (path === '/api/health') return sendJson(res, 200, { ok: true });
 
@@ -121,6 +125,9 @@ const server = createServer(async (req, res) => {
   }
 
   // Everything else: the exported web app. Unknown paths fall back to index.html (client-side routes).
+  // Pages must be re-checked on every visit (so "Closed" takes effect immediately); only the
+  // content-hashed bundles under _expo/static are cached long-term.
+  if (!path.startsWith('/_expo/static/')) res.setHeader('Cache-Control', 'no-cache');
   return handler(req, res, {
     public: join(root, 'dist'),
     rewrites: [{ source: '**', destination: '/index.html' }],
