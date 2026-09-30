@@ -1,11 +1,12 @@
 // Production web server (Railway): serves the exported web app from dist/ and a small API.
 //   GET /api/menu    live Toast menu (cached 5 min; keeps serving the last good copy if Toast is down)
+//   GET /api/menu/groups  setup helper: Toast group names and where each lands in the app
 //   GET /api/health  health check for Railway
 import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import handler from 'serve-handler';
-import { fetchToastMenu, ToastConfigError } from './toastMenu.mjs';
+import { fetchToastGroups, fetchToastMenu, ToastConfigError } from './toastMenu.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT) || 3000;
@@ -58,6 +59,17 @@ const server = createServer(async (req, res) => {
       console.error('[menu]', e.message);
       // Detail stays in the server log; the app falls back to its built-in menu either way.
       return sendJson(res, status, { error: status === 503 ? 'Live menu not configured' : 'Live menu unavailable' });
+    }
+  }
+
+  // Setup helper: shows your Toast menu group names and how each maps into the app, so unmatched
+  // groups (e.g. a differently named draft list) can be added to SECTION_FOR in toastMenu.mjs.
+  if (path === '/api/menu/groups') {
+    try {
+      return sendJson(res, 200, await fetchToastGroups());
+    } catch (e) {
+      console.error('[menu/groups]', e.message);
+      return sendJson(res, e instanceof ToastConfigError ? 503 : 502, { error: 'Toast menu unavailable' });
     }
   }
 

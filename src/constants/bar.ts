@@ -25,7 +25,15 @@ export const BAR = {
 
 export const fullAddress = `${BAR.address.street}, ${BAR.address.city}, ${BAR.address.state} ${BAR.address.zip}`;
 
-/** Happy hour ends and the "6 PM Surprise" unlocks at this hour (bar local time), for this many minutes. */
+/** Happy hour: Monday–Friday, 3–6 PM bar time (0 = Sunday). */
+export const HAPPY_HOUR = {
+  days: [1, 2, 3, 4, 5],
+  startHour: 15,
+  endHour: 18,
+  label: 'Mon–Fri 3–6 PM',
+} as const;
+
+/** When happy hour ends, the "6 PM Surprise" unlocks (happy-hour days only) for this many minutes. */
 export const FLASH_DEAL = {
   unlockHour: 18,
   durationMinutes: 60,

@@ -9,23 +9,24 @@ module.exports = {
     extend: {
       colors: {
         // Keep in sync with src/constants/theme.ts (used where className can't reach, e.g. icon colors).
+        // Game On yellow & black
         ink: {
-          DEFAULT: '#0B0F14',
-          900: '#0B0F14',
-          800: '#121820',
-          700: '#1A222D',
-          600: '#26313F',
-          500: '#3A4757',
+          DEFAULT: '#0A0A0A',
+          900: '#0A0A0A',
+          800: '#151515',
+          700: '#1F1F1F',
+          600: '#2C2C2C',
+          500: '#424242',
         },
         brand: {
-          DEFAULT: '#FB4F14',
-          light: '#FF7A45',
-          dark: '#C73A08',
+          DEFAULT: '#FFC72C',
+          light: '#FFD966',
+          dark: '#E0A800',
         },
         gold: '#FFC72C',
         turf: '#22C55E',
-        chalk: '#F5F7FA',
-        muted: '#8B98A9',
+        chalk: '#F5F5F5',
+        muted: '#A3A3A3',
       },
       fontFamily: {
         display: ['System'],

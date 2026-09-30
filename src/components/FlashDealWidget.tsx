@@ -1,18 +1,39 @@
 import * as Haptics from 'expo-haptics';
-import { Bell, BellOff, Gift, Lock, PartyPopper } from 'lucide-react-native';
+import { Bell, BellOff, Beer, Clock, Gift, PartyPopper } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Platform, Pressable, Text, View } from 'react-native';
 import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
-import { FLASH_DEAL } from '@/constants/bar';
+import { HAPPY_HOUR } from '@/constants/bar';
 import { colors } from '@/constants/theme';
 import { useNow } from '@/hooks/useNow';
-import { barDateKey, formatClock, formatMinSec, getFlashDealState, type FlashDealPhase } from '@/lib/time';
+import {
+  barDateKey,
+  formatClock,
+  formatMinSec,
+  getFlashDealState,
+  nextHappyHourLabel,
+  splitDuration,
+  type FlashDealPhase,
+} from '@/lib/time';
 import { gamedayService } from '@/services/gameday';
 import { flashAlertsEnabled, setFlashDealAlerts } from '@/services/notifications';
 import type { FlashDeal } from '@/types';
 
-const hourLabel = `${FLASH_DEAL.unlockHour % 12 || 12} PM`;
-const PREVIEW_ORDER: (FlashDealPhase | null)[] = [null, 'live', 'ended', 'counting-down'];
+const PREVIEW_ORDER: (FlashDealPhase | null)[] = [null, 'before', 'happy-hour', 'live', 'off'];
+
+/** HH:MM:SS, with a day prefix for long waits (e.g. over the weekend). */
+function formatLong(ms: number): string {
+  const { days } = splitDuration(ms);
+  return days > 0 ? `${days}d ${formatClock(ms - days * 86_400_000)}` : formatClock(ms);
+}
+
+function BigClock({ ms, long }: { ms: number; long?: boolean }) {
+  return (
+    <Text className="mt-1 text-5xl font-black text-chalk" style={{ fontVariant: ['tabular-nums'] }}>
+      {long ? formatLong(ms) : formatClock(ms)}
+    </Text>
+  );
+}
 
 export function FlashDealWidget() {
   const now = useNow();
@@ -20,7 +41,8 @@ export function FlashDealWidget() {
   const [deal, setDeal] = useState<FlashDeal | null>();
   const [alertsOn, setAlertsOn] = useState(false);
   const real = getFlashDealState(now);
-  const phase = PREVIEW_ORDER[previewIndex] ?? real.phase;
+  const preview = PREVIEW_ORDER[previewIndex];
+  const phase = preview ?? real.phase;
   const prevPhase = useRef(phase);
   const dateKey = barDateKey(now);
 
@@ -55,17 +77,19 @@ export function FlashDealWidget() {
   };
 
   // In preview mode, fake a plausible remaining time so the clock still renders.
-  const msRemaining = PREVIEW_ORDER[previewIndex] ? (phase === 'live' ? 42 * 60_000 : 3 * 3600_000) : real.msRemaining;
+  const msRemaining = preview ? (phase === 'live' ? 42 * 60_000 : phase === 'off' ? 44 * 3600_000 : 2 * 3600_000) : real.msRemaining;
+  const nextDayLabel = preview ? 'Monday' : nextHappyHourLabel(real.daysUntilNextHappyHour, now);
+  const highlighted = phase === 'live' || phase === 'happy-hour';
 
   return (
     <Pressable
       onLongPress={__DEV__ ? () => setPreviewIndex((i) => (i + 1) % PREVIEW_ORDER.length) : undefined}
-      className={`overflow-hidden rounded-3xl border p-5 ${phase === 'live' ? 'border-gold bg-ink-700' : 'border-ink-600 bg-ink-800'}`}
+      className={`overflow-hidden rounded-3xl border p-5 ${highlighted ? 'border-brand bg-ink-700' : 'border-ink-600 bg-ink-800'}`}
     >
       <View className="flex-row items-center justify-between">
         <View className="flex-row items-center gap-2">
-          <Gift size={18} color={phase === 'live' ? colors.gold : colors.brand} />
-          <Text className="text-xs font-black uppercase tracking-[3px] text-chalk">The {hourLabel} Surprise</Text>
+          <Gift size={18} color={colors.brand} />
+          <Text className="text-xs font-black uppercase tracking-[3px] text-chalk">Happy Hour</Text>
         </View>
         <Pressable
           onPress={toggleAlerts}
@@ -82,29 +106,39 @@ export function FlashDealWidget() {
         </Pressable>
       </View>
 
-      {phase === 'counting-down' ? (
+      {phase === 'before' ? (
         <View className="mt-4 items-center">
           <View className="h-14 w-14 items-center justify-center rounded-full bg-ink-600">
-            <Lock size={26} color={colors.muted} />
+            <Clock size={26} color={colors.brand} />
           </View>
-          <Text className="mt-3 text-sm text-muted">Happy hour ends & tonight’s surprise unlocks in</Text>
-          <Text className="mt-1 text-5xl font-black text-chalk" style={{ fontVariant: ['tabular-nums'] }}>
-            {formatClock(msRemaining)}
-          </Text>
+          <Text className="mt-3 text-sm text-muted">Happy hour starts in</Text>
+          <BigClock ms={msRemaining} />
           <Text className="mt-2 text-center text-xs text-muted">
-            One hour only, {hourLabel}–{(FLASH_DEAL.unlockHour + 1) % 12 || 12} PM. Be here or be square.
+            {HAPPY_HOUR.label} · then a 1-hour surprise deal unlocks at 6.
           </Text>
+        </View>
+      ) : null}
+
+      {phase === 'happy-hour' ? (
+        <View className="mt-4 items-center">
+          <View className="h-14 w-14 items-center justify-center rounded-full bg-brand">
+            <Beer size={26} color={colors.ink900} />
+          </View>
+          <Text className="mt-3 text-2xl font-black text-brand">Happy Hour is ON</Text>
+          <Text className="mt-1 text-sm text-muted">Tonight’s surprise unlocks in</Text>
+          <BigClock ms={msRemaining} />
+          <Text className="mt-2 text-center text-xs text-muted">Until 6 PM. Be here or be square.</Text>
         </View>
       ) : null}
 
       {phase === 'live' ? (
         <Animated.View entering={ZoomIn.springify().damping(14)} style={{ marginTop: 16, alignItems: 'center' }}>
-          <PartyPopper size={34} color={colors.gold} />
+          <PartyPopper size={34} color={colors.brand} />
           {deal === undefined ? (
             <Text className="mt-3 text-muted">Unwrapping…</Text>
           ) : deal ? (
             <Animated.View entering={FadeIn.delay(150)} style={{ alignItems: 'center' }}>
-              <Text className="mt-2 text-center text-3xl font-black text-gold">{deal.title}</Text>
+              <Text className="mt-2 text-center text-3xl font-black text-brand">{deal.title}</Text>
               <Text className="mt-1 text-center text-base text-chalk">{deal.description}</Text>
               {deal.finePrint ? <Text className="mt-1 text-center text-xs text-muted">{deal.finePrint}</Text> : null}
             </Animated.View>
@@ -112,25 +146,25 @@ export function FlashDealWidget() {
             <Text className="mt-3 text-center text-chalk">Ask your bartender about tonight’s surprise!</Text>
           )}
           <View className="mt-4 rounded-full bg-brand px-4 py-1.5">
-            <Text className="font-bold text-white" style={{ fontVariant: ['tabular-nums'] }}>
+            <Text className="font-bold text-ink" style={{ fontVariant: ['tabular-nums'] }}>
               Ends in {formatMinSec(msRemaining)}
             </Text>
           </View>
         </Animated.View>
       ) : null}
 
-      {phase === 'ended' ? (
+      {phase === 'off' ? (
         <View className="mt-4 items-center">
-          <Text className="text-center text-base font-semibold text-chalk">Tonight’s surprise has wrapped up.</Text>
-          <Text className="mt-1 text-sm text-muted">Next unlock in</Text>
-          <Text className="mt-1 text-3xl font-black text-chalk" style={{ fontVariant: ['tabular-nums'] }}>
-            {formatClock(msRemaining)}
+          <Text className="text-center text-base font-semibold text-chalk">
+            Happy hour is back {nextDayLabel} at 3 PM
           </Text>
+          <BigClock ms={msRemaining} long />
+          <Text className="mt-2 text-center text-xs text-muted">{HAPPY_HOUR.label} · surprise deal at 6.</Text>
         </View>
       ) : null}
 
       {__DEV__ && previewIndex > 0 ? (
-        <Text className="mt-3 text-center text-[10px] uppercase tracking-widest text-gold">
+        <Text className="mt-3 text-center text-[10px] uppercase tracking-widest text-brand">
           Dev preview: {phase} (long-press to cycle)
         </Text>
       ) : null}

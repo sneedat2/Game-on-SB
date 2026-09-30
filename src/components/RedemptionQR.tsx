@@ -24,7 +24,7 @@ export function RedemptionQR({ redemption }: { redemption: RedemptionCode }) {
             <Text className="mt-3 text-center font-bold text-ink-700">Code expired</Text>
           </View>
         ) : (
-          <QRCode value={redemption.payload} size={220} color="#0B0F14" backgroundColor="#FFFFFF" ecl="M" />
+          <QRCode value={redemption.payload} size={220} color="#0A0A0A" backgroundColor="#FFFFFF" ecl="M" />
         )}
       </View>
 

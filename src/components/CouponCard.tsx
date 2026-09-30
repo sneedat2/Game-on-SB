@@ -55,8 +55,8 @@ export function CouponCard({ coupon, redeemed, onRedeem }: { coupon: Coupon; red
               accessibilityLabel={`Redeem ${coupon.title}`}
               className={`flex-row items-center gap-1.5 rounded-full px-3 py-1.5 ${unlocked ? 'bg-brand' : 'bg-ink-600'}`}
             >
-              <QrCode size={14} color={unlocked ? '#FFFFFF' : colors.muted} />
-              <Text className={`text-xs font-bold ${unlocked ? 'text-white' : 'text-muted'}`}>{unlocked ? 'Redeem' : 'Locked'}</Text>
+              <QrCode size={14} color={unlocked ? colors.onBrand : colors.muted} />
+              <Text className={`text-xs font-bold ${unlocked ? 'text-ink' : 'text-muted'}`}>{unlocked ? 'Redeem' : 'Locked'}</Text>
             </Pressable>
           )}
         </View>

@@ -65,9 +65,11 @@ export type MenuSectionId =
   | 'seasonal'
   | 'lent'
   | 'beverages'
-  | 'summer'
-  | 'growlers'
-  | 'togo';
+  | 'draft'
+  | 'bottles'
+  | 'seltzers'
+  | 'cocktails'
+  | 'wine';
 
 export interface MenuItem {
   id: string;

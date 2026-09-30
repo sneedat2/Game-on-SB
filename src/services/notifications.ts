@@ -8,7 +8,7 @@ import { readJSON, writeJSON } from './storage';
 import { ensureSession, supabase } from './supabase';
 
 // Two layers:
-//  1. Local notifications scheduled on-device for the next week of 6 PM unlocks. Works offline,
+//  1. Local notifications scheduled on-device for the next weekday 6 PM unlocks. Works offline,
 //     in Expo Go, and without any backend.
 //  2. Remote push via Expo push tokens stored in Supabase, so the bar can blast gameday specials
 //     (see supabase/functions/flash-deal-push). Requires a development build + EAS project id.
@@ -17,7 +17,7 @@ const supported = Platform.OS !== 'web';
 const CHANNEL_ID = 'flash-deals';
 const PREF_KEY = 'flash-alerts-enabled';
 const ID_PREFIX = 'flash-deal-';
-const DAYS_AHEAD = 7;
+const UNLOCKS_AHEAD = 5; // a work-week of weekday 6 PM alerts, refreshed on every launch
 
 export function initNotifications() {
   if (!supported) return;
@@ -51,7 +51,7 @@ async function ensurePermission(): Promise<boolean> {
 
 export const flashAlertsEnabled = () => readJSON<boolean>(PREF_KEY, false);
 
-/** Schedules (or refreshes) the next week of 6 PM unlock alerts. Safe to call on every launch. */
+/** Schedules (or refreshes) the next weekday 6 PM unlock alerts. Safe to call on every launch. */
 export async function scheduleFlashDealAlerts(): Promise<void> {
   if (!supported) return;
   const scheduled = await Notifications.getAllScheduledNotificationsAsync();
@@ -62,7 +62,7 @@ export async function scheduleFlashDealAlerts(): Promise<void> {
   );
 
   let unlockAt = getFlashDealState().nextUnlockAt;
-  for (let i = 0; i < DAYS_AHEAD; i++) {
+  for (let i = 0; i < UNLOCKS_AHEAD; i++) {
     await Notifications.scheduleNotificationAsync({
       identifier: `${ID_PREFIX}${barDateKey(unlockAt)}`,
       content: {

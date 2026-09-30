@@ -54,7 +54,8 @@ function ResultBar({ option, pct, index, mine, leading }: { option: PollOption; 
             top: 0,
             bottom: 0,
             left: 0,
-            backgroundColor: mine ? 'rgba(251,79,20,0.45)' : leading ? 'rgba(255,199,44,0.25)' : 'rgba(58,71,87,0.7)',
+            // yours = brand yellow, current leader = soft white, the rest = charcoal
+            backgroundColor: mine ? 'rgba(255,199,44,0.42)' : leading ? 'rgba(255,255,255,0.14)' : 'rgba(66,66,66,0.7)',
           },
         ]}
       />

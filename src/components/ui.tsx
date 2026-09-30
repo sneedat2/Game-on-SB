@@ -79,7 +79,7 @@ export function Button({
   className?: string;
 }) {
   const styles: Record<ButtonVariant, { box: string; text: string; icon: string }> = {
-    primary: { box: 'bg-brand', text: 'text-white', icon: '#FFFFFF' },
+    primary: { box: 'bg-brand', text: 'text-ink', icon: colors.onBrand },
     secondary: { box: 'bg-ink-700 border border-ink-500', text: 'text-chalk', icon: colors.chalk },
     ghost: { box: 'bg-transparent', text: 'text-brand', icon: colors.brand },
   };
@@ -114,7 +114,7 @@ export function Chip({ label, active, onPress }: { label: string; active?: boole
       accessibilityState={{ selected: active }}
       className={`rounded-full border px-4 py-2 ${active ? 'border-brand bg-brand' : 'border-ink-500 bg-ink-800'}`}
     >
-      <Text className={`text-sm font-semibold ${active ? 'text-white' : 'text-chalk'}`}>{label}</Text>
+      <Text className={`text-sm font-semibold ${active ? 'text-ink' : 'text-chalk'}`}>{label}</Text>
     </Pressable>
   );
 }
@@ -140,7 +140,7 @@ export function Segmented<T extends string>({
             accessibilityState={{ selected: active }}
             className={`flex-1 items-center rounded-lg py-2.5 ${active ? 'bg-brand' : ''}`}
           >
-            <Text className={`text-sm font-bold ${active ? 'text-white' : 'text-muted'}`}>{o.label}</Text>
+            <Text className={`text-sm font-bold ${active ? 'text-ink' : 'text-muted'}`}>{o.label}</Text>
           </Pressable>
         );
       })}

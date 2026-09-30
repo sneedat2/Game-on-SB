@@ -68,38 +68,60 @@ const SECTION_FOR = {
   'seasonal menu': 'seasonal',
   'lent menu': 'lent',
   beverages: 'beverages',
-  summer: 'summer',
-  'growler fill': 'growlers',
-  'growler fills': 'growlers',
-  togo: 'togo',
-  'to go': 'togo',
+  // In-house bar menu (usually POS-only in Toast). Add your exact Toast group names here if they
+  // differ - GET /api/menu/groups lists them.
+  draft: 'draft',
+  drafts: 'draft',
+  'draft beer': 'draft',
+  'draft beers': 'draft',
+  'on tap': 'draft',
+  'beer on tap': 'draft',
+  taps: 'draft',
+  bottles: 'bottles',
+  'bottled beer': 'bottles',
+  'bottle beer': 'bottles',
+  'bottles & cans': 'bottles',
+  'bottles and cans': 'bottles',
+  cans: 'bottles',
+  'canned beer': 'bottles',
+  'can beer': 'bottles',
+  'domestic bottles': 'bottles',
+  'import bottles': 'bottles',
+  'craft cans': 'bottles',
+  seltzers: 'seltzers',
+  seltzer: 'seltzers',
+  'hard seltzers': 'seltzers',
+  cocktails: 'cocktails',
+  'mixed drinks': 'cocktails',
+  'signature cocktails': 'cocktails',
+  shots: 'cocktails',
+  wine: 'wine',
+  wines: 'wine',
+  // Intentionally unmapped (hidden in the app): NICOTINE, and the discontinued Summer, Growler Fill
+  // and TOGO groups.
 };
 
 const norm = (s) => String(s ?? '').trim().toLowerCase();
-const onlineVisible = (item) => !Array.isArray(item.visibility) || item.visibility.length === 0 || item.visibility.includes('TOAST_ONLINE_ORDERING');
+
+// Food follows the online ordering page. Bar drinks are served in-house, so items that only show on
+// the register (POS) count too.
+const IN_HOUSE_SECTIONS = new Set(['draft', 'bottles', 'seltzers', 'cocktails', 'wine']);
+function isShown(item, sectionId) {
+  const v = item.visibility;
+  if (!Array.isArray(v) || v.length === 0) return true;
+  if (v.includes('TOAST_ONLINE_ORDERING')) return true;
+  return IN_HOUSE_SECTIONS.has(sectionId) && v.includes('POS');
+}
 const priceOf = (item) => (typeof item.price === 'number' ? item.price : undefined);
 
 export function mapToastMenu(menusPayload, outOfStockGuids = new Set()) {
   const items = [];
-  const growlers = new Map(); // beer name -> item with sizes
 
   const visitGroup = (group, inheritedSection) => {
     const sectionId = SECTION_FOR[norm(group.name)] ?? inheritedSection;
     if (sectionId) {
       for (const item of group.menuItems ?? []) {
-        if (!onlineVisible(item)) continue;
-        const soldOut = outOfStockGuids.has(item.guid) || undefined;
-
-        // Growler items are named like "32oz Blue Moon" / "64oz Blue Moon" -> one row with two sizes.
-        const size = sectionId === 'growlers' ? /^(\d+)\s*oz\.?\s+(.+)$/i.exec(item.name.trim()) : null;
-        if (size && priceOf(item) !== undefined) {
-          const beer = size[2].trim();
-          const row = growlers.get(beer.toLowerCase()) ?? { id: `growlers-${item.guid}`, sectionId, name: beer, sizes: [] };
-          row.sizes.push({ label: `${size[1]} oz`, price: priceOf(item) });
-          growlers.set(beer.toLowerCase(), row);
-          continue;
-        }
-
+        if (!isShown(item, sectionId)) continue;
         items.push({
           id: item.guid,
           toastGuid: item.guid,
@@ -107,7 +129,7 @@ export function mapToastMenu(menusPayload, outOfStockGuids = new Set()) {
           name: item.name.trim(),
           description: item.description?.trim() || undefined,
           price: priceOf(item),
-          soldOut,
+          soldOut: outOfStockGuids.has(item.guid) || undefined,
         });
       }
     }
@@ -118,15 +140,28 @@ export function mapToastMenu(menusPayload, outOfStockGuids = new Set()) {
     const menuSection = SECTION_FOR[norm(menu.name)]; // e.g. "LENT MENU" with items directly under it
     for (const group of menu.menuGroups ?? []) visitGroup(group, menuSection);
   }
-
-  for (const row of growlers.values()) {
-    row.sizes.sort((a, b) => parseInt(a.label) - parseInt(b.label));
-    items.push(row);
-  }
   return items;
 }
 
+/** Every Toast menu/group name with its item count and which app section it maps to (or null). */
+export function listToastGroups(menusPayload) {
+  const rows = [];
+  const visit = (menuName, group, inherited, depth) => {
+    const mappedTo = SECTION_FOR[norm(group.name)] ?? inherited ?? null;
+    rows.push({ menu: menuName, group: `${'  '.repeat(depth)}${group.name}`, items: (group.menuItems ?? []).length, mappedTo });
+    for (const child of group.menuGroups ?? []) visit(menuName, child, mappedTo ?? undefined, depth + 1);
+  };
+  for (const menu of menusPayload.menus ?? []) {
+    for (const group of menu.menuGroups ?? []) visit(menu.name, group, SECTION_FOR[norm(menu.name)], 0);
+  }
+  return rows;
+}
+
 // ---------------- Public ----------------
+
+export async function fetchToastGroups() {
+  return listToastGroups(await toastGet(requireConfig(), '/menus/v2/menus'));
+}
 
 export async function fetchToastMenu() {
   const host = requireConfig();

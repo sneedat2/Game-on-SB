@@ -2,7 +2,7 @@
 import { Camera, Clock, MapPin, Navigation, Phone, ShoppingBag, Users, type LucideIcon } from 'lucide-react-native';
 import { Pressable, Text, View } from 'react-native';
 import { Button, Card, Screen, SectionHeader } from '@/components/ui';
-import { BAR } from '@/constants/bar';
+import { BAR, HAPPY_HOUR } from '@/constants/bar';
 import { colors } from '@/constants/theme';
 import { callBar, openDirections, openExternal, openOnlineOrdering } from '@/services/ordering';
 
@@ -28,7 +28,7 @@ export default function InfoScreen() {
       <Card className="gap-4">
         <View className="flex-row items-start gap-3">
           <View className="h-12 w-12 items-center justify-center rounded-2xl bg-brand">
-            <MapPin size={22} color="#FFFFFF" />
+            <MapPin size={22} color={colors.onBrand} />
           </View>
           <View className="flex-1">
             <Text className="text-lg font-extrabold text-chalk">{BAR.name}</Text>
@@ -58,7 +58,11 @@ export default function InfoScreen() {
             </Text>
           </View>
         ))}
-        <Text className="mt-2 text-xs text-muted">Happy hour runs until 6 PM - then the surprise drops.</Text>
+        <View className="mt-3 flex-row items-center justify-between rounded-xl bg-brand px-3 py-2.5">
+          <Text className="font-black text-ink">Happy Hour</Text>
+          <Text className="font-bold text-ink">{HAPPY_HOUR.label}</Text>
+        </View>
+        <Text className="mt-2 text-xs text-muted">When happy hour ends at 6, a 1-hour surprise deal drops in the app.</Text>
       </Card>
 
       <View>

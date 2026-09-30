@@ -31,8 +31,13 @@ function barNow() {
       .formatToParts(new Date())
       .map((p) => [p.type, p.value]),
   );
-  return { hour: Number(parts.hour), date: `${parts.year}-${parts.month}-${parts.day}` };
+  const date = `${parts.year}-${parts.month}-${parts.day}`;
+  const weekday = new Date(`${date}T12:00:00Z`).getUTCDay(); // 0 = Sunday
+  return { hour: Number(parts.hour), date, weekday };
 }
+
+// Happy hour (and so the 6 PM Surprise) runs Monday–Friday only.
+const HAPPY_HOUR_DAYS = [1, 2, 3, 4, 5];
 
 Deno.serve(async (req) => {
   // The anon key is a valid JWT too, so require the service-role key explicitly - otherwise any
@@ -43,8 +48,8 @@ Deno.serve(async (req) => {
   }
 
   const force = new URL(req.url).searchParams.get('force') === '1';
-  const { hour, date } = barNow();
-  if (hour !== 18 && !force) return Response.json({ skipped: true, hour });
+  const { hour, date, weekday } = barNow();
+  if ((hour !== 18 || !HAPPY_HOUR_DAYS.includes(weekday)) && !force) return Response.json({ skipped: true, hour, weekday });
 
   const admin = createClient(Deno.env.get('SUPABASE_URL')!, serviceKey);
 

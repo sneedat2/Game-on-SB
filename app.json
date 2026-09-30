@@ -7,7 +7,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "backgroundColor": "#0B0F14",
+    "backgroundColor": "#0A0A0A",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.gameoncincy.app"
@@ -15,7 +15,7 @@
     "android": {
       "package": "com.gameoncincy.app",
       "adaptiveIcon": {
-        "backgroundColor": "#0B0F14",
+        "backgroundColor": "#0A0A0A",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -33,7 +33,7 @@
       [
         "expo-notifications",
         {
-          "color": "#FB4F14"
+          "color": "#FFC72C"
         }
       ]
     ],

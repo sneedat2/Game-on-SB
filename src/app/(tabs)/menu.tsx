@@ -99,18 +99,21 @@ export default function MenuScreen() {
     return menu.data.sections.filter((s) => sectionKindsFor[view].includes(s.kind) && withItems.has(s.id));
   }, [menu.data, view]);
 
+  // A deep-linked section (e.g. "draft") may be empty on this menu - show everything instead.
+  const activeSection = tabSections.some((s) => s.id === section) ? section : 'all';
+
   const grouped = useMemo(() => {
     if (!menu.data) return [];
     return tabSections
-      .filter((s) => section === 'all' || s.id === section)
+      .filter((s) => activeSection === 'all' || s.id === activeSection)
       .map((s) => ({ section: s, items: menu.data!.items.filter((i) => i.sectionId === s.id) }))
       .filter((g) => g.items.length > 0);
-  }, [menu.data, tabSections, section]);
+  }, [menu.data, tabSections, activeSection]);
 
   return (
     <Screen
       title="Menu"
-      subtitle="Apps, wings & growler fills"
+      subtitle="Apps, wings & cold drinks"
       refreshing={(menu.loading && Boolean(menu.data)) || (soon.loading && Boolean(soon.data))}
       onRefresh={() => {
         void menu.reload();
@@ -133,9 +136,9 @@ export default function MenuScreen() {
         <>
           {menu.data ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-              <Chip label="All" active={section === 'all'} onPress={() => setSection('all')} />
+              <Chip label="All" active={activeSection === 'all'} onPress={() => setSection('all')} />
               {tabSections.map((s) => (
-                <Chip key={s.id} label={s.title} active={section === s.id} onPress={() => setSection(s.id)} />
+                <Chip key={s.id} label={s.title} active={activeSection === s.id} onPress={() => setSection(s.id)} />
               ))}
             </ScrollView>
           ) : null}
@@ -155,6 +158,12 @@ export default function MenuScreen() {
             <ErrorState error={menu.error} onRetry={menu.reload} />
           ) : !menu.data ? (
             <LoadingState label="Loading the menu…" />
+          ) : grouped.length === 0 ? (
+            <Card className="items-center py-8">
+              <Beer size={28} color={colors.brand} />
+              <Text className="mt-3 text-center text-lg font-extrabold text-chalk">Our drink list is on its way</Text>
+              <Text className="mt-1 text-center text-sm text-muted">Ask your bartender what’s pouring today.</Text>
+            </Card>
           ) : (
             grouped.map(({ section: s, items }) => (
               <Card key={s.id}>

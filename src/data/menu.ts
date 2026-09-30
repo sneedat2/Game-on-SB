@@ -1,7 +1,8 @@
 // Game On's real menu, copied from the Toast online ordering page
 // (https://order.toasttab.com/online/game-on-bar-and-grill) on 2026-09-30.
-// Edit prices/items here until the live Toast menu sync (toast-proxy) is connected.
-// Not included: NICOTINE (app-store rules restrict promoting nicotine products).
+// This is the fallback when the live Toast menu (server/toastMenu.mjs) isn't reachable.
+// Not included: NICOTINE (app-store rules restrict promoting nicotine products), and the
+// discontinued Summer, Growler Fill and To-Go sections.
 import type { MenuItem, MenuSection, MenuSectionId } from '@/types';
 
 // Display order within each Menu tab: Food tab = food then Beverages; Bar tab = alcohol.
@@ -17,9 +18,13 @@ export const menuSections: MenuSection[] = [
   { id: 'seasonal', title: 'Seasonal Menu', kind: 'food', blurb: 'Here for a limited time' },
   { id: 'lent', title: 'Lent Menu', kind: 'food' },
   { id: 'beverages', title: 'Beverages', kind: 'beverage' },
-  { id: 'summer', title: 'Summer Sips', kind: 'alcohol' },
-  { id: 'growlers', title: 'Growler Fills', kind: 'alcohol', blurb: 'Take your favorite tap home · 32 oz or 64 oz' },
-  { id: 'togo', title: 'To-Go Cases', kind: 'alcohol' },
+  // Bar tab. In-house drinks (draft, bottles, etc.) live on Toast's register menu, not the online
+  // ordering page; they fill in from the live Toast menu. Sections with no items are hidden.
+  { id: 'draft', title: 'On Tap', kind: 'alcohol' },
+  { id: 'bottles', title: 'Bottles & Cans', kind: 'alcohol' },
+  { id: 'seltzers', title: 'Seltzers', kind: 'alcohol' },
+  { id: 'cocktails', title: 'Cocktails & Shots', kind: 'alcohol' },
+  { id: 'wine', title: 'Wine', kind: 'alcohol' },
 ];
 
 type Row = [name: string, price?: number, soldOut?: boolean];
@@ -29,17 +34,6 @@ const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(
 const section = (sectionId: MenuSectionId, rows: Row[]): MenuItem[] =>
   rows.map(([name, price, soldOut]) => ({ id: `${sectionId}-${slug(name)}`, sectionId, name, price, soldOut }));
 
-// [beer, 32 oz price, 64 oz price]. A missing size isn't offered, or its Toast price looked
-// like a typo (see README "Menu" notes) - add it back once confirmed.
-const growler = (name: string, oz32?: number, oz64?: number): MenuItem => ({
-  id: `growlers-${slug(name)}`,
-  sectionId: 'growlers',
-  name,
-  sizes: [
-    ...(oz32 !== undefined ? [{ label: '32 oz', price: oz32 }] : []),
-    ...(oz64 !== undefined ? [{ label: '64 oz', price: oz64 }] : []),
-  ],
-});
 
 export const menuItems: MenuItem[] = [
   ...section('apps', [
@@ -194,34 +188,7 @@ export const menuItems: MenuItem[] = [
     ['Water'],
   ]),
 
-  ...section('summer', [
-    ['Rosé', 8],
-    ['On & Off Again', 6.5],
-    ['Loverboy', 7],
-  ]),
-
-  growler('312', undefined, 13),
-  growler('Blue Moon', 8.5, 16),
-  growler('Bubbles', 9.5, 18),
-  growler('Bud Light', undefined, 11),
-  growler('Budweiser', 6.5, 14),
-  growler('Coors Light', 6, 12),
-  growler('Grand Mimosa', 8.5, 16),
-  growler('Guinness', 8.5, 16),
-  growler('Mich Ultra', 5.5, 10),
-  growler('Miller Lite', 6, 11),
-  growler('Pilgrim', 9, 17),
-  growler('Psychopathy', undefined, 17),
-  growler('Sam Adams', undefined, 17),
-  growler('Space Dust', 10, 19),
-  growler('Truth', 11, 21),
-  growler('Yuengling Lager', 6.5, 12),
-  growler('Yum Yum', 10, 19),
-
-  ...section('togo', [
-    ['Bud Light Case', 30],
-    ['Miller Lite Case', 30],
-    ['Coors Light Case', 30],
-    ['Mich Ultra Case', 30],
-  ]),
+  // Bar tab items (draft, bottles & cans, ...) aren't on the online ordering page. They come from
+  // the live Toast menu; to show them without it, add them here, e.g.:
+  //   ...section('draft', [['Miller Lite', 5], ['Rhinegeist Truth', 7]]),
 ];
