@@ -1,20 +1,9 @@
 // Starting content for a brand-new admin store (first boot). Everything here is editable at /admin.
-// Sample games, Coming Soon and showcase entries are placeholders - replace them in the admin.
+// Sample polls, deals, Coming Soon and showcase entries are placeholders - replace them in the admin.
 import { randomUUID } from 'node:crypto';
 
 const DAY_MS = 86_400_000;
 const id = () => randomUUID().slice(0, 8);
-
-function nextWeekdayAt(weekday, hour, minute = 0) {
-  // Approximate bar-local (ET) wall time; fine for sample data the admin will replace.
-  const now = new Date();
-  const d = new Date(now);
-  d.setUTCHours(hour + 4, minute, 0, 0); // ET ≈ UTC-4 (EDT)
-  const delta = (weekday - d.getUTCDay() + 7) % 7;
-  d.setTime(d.getTime() + delta * DAY_MS);
-  if (d.getTime() < now.getTime()) d.setTime(d.getTime() + 7 * DAY_MS);
-  return d.toISOString();
-}
 
 const poll = (category, question, labels, { featured = false, days = 7 } = {}) => ({
   id: id(),
@@ -31,6 +20,41 @@ export const defaultMaintenance = () => ({
   enabled: false,
   message: 'We’re making some upgrades. Be right back - come see us at 5880 Cheviot Rd in the meantime!',
 });
+
+/** Automatic schedules on, plus the gameday specials shown under each team's games. */
+export const defaultGamedaySettings = () => ({
+  auto: true,
+  teamSpecials: {
+    bengals: ['Drink bucket specials all game', 'Souvenir cup refills'],
+    bearcats: ['Drink bucket specials all game', 'Souvenir cup refills'],
+    reds: ['Drink bucket specials all game', 'Souvenir cup refills'],
+    fcc: ['Drink bucket specials all game', 'Souvenir cup refills'],
+  },
+});
+
+// The sample games the first version seeded into every store - removed on upgrade.
+const SEEDED_SAMPLES = [
+  ['bengals', 'Steelers', '$20 domestic buckets'],
+  ['bearcats', 'Kansas State', '$15 seltzer buckets'],
+  ['fcc', 'Columbus Crew', '$3 souvenir cup refills'],
+];
+
+/** Brings a store saved by an older version up to date. Returns true if anything changed. */
+export function migrateContent(c) {
+  let changed = false;
+  if (!c.maintenance) {
+    c.maintenance = defaultMaintenance();
+    changed = true;
+  }
+  if (!c.gamedaySettings) {
+    c.gamedaySettings = defaultGamedaySettings();
+    c.gameday = (c.gameday ?? []).filter(
+      (g) => !SEEDED_SAMPLES.some(([team, opponent, special]) => g.team === team && g.opponent === opponent && g.specials?.[0] === special),
+    );
+    changed = true;
+  }
+  return changed;
+}
 
 export function defaultContent() {
   const polls = [
@@ -63,11 +87,9 @@ export function defaultContent() {
     polls,
     votes: {}, // pollId -> optionId -> count
     voters: {}, // pollId -> deviceId -> optionId (one vote per device)
-    gameday: [
-      { id: id(), team: 'bengals', opponent: 'Steelers', homeAway: 'home', startsAt: nextWeekdayAt(0, 13), broadcast: 'CBS', specials: ['$20 domestic buckets', '$3 souvenir cup refills'] },
-      { id: id(), team: 'bearcats', opponent: 'Kansas State', homeAway: 'home', startsAt: nextWeekdayAt(6, 15, 30), broadcast: 'ESPN2', specials: ['$15 seltzer buckets'] },
-      { id: id(), team: 'fcc', opponent: 'Columbus Crew', homeAway: 'away', startsAt: nextWeekdayAt(3, 19, 30), broadcast: 'Apple TV', specials: ['$3 souvenir cup refills'] },
-    ],
+    // Real games come from ESPN automatically (server/schedule.mjs); these are the admin's extras.
+    gamedaySettings: defaultGamedaySettings(),
+    gameday: [],
     comingSoon: [
       { id: id(), kind: 'food', title: 'October Burger of the Month', description: 'Your pick hits the grill when voting closes.', eta: 'After voting closes', fromPoll: true },
       { id: id(), kind: 'drink', title: 'Fall Seasonal Drafts', description: 'Oktoberfest and pumpkin ales rotating onto the taps.', eta: 'Early October', fromPoll: false },

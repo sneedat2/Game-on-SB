@@ -3,7 +3,7 @@
 // lives there, surviving redeploys. Without a volume, edits reset on every deploy.
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { defaultContent, defaultMaintenance } from './defaults.mjs';
+import { defaultContent, migrateContent } from './defaults.mjs';
 
 const volume = process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || '';
 const dir = volume || join(process.cwd(), 'data');
@@ -19,7 +19,10 @@ export async function loadStore() {
   await mkdir(dir, { recursive: true });
   try {
     content = JSON.parse(await readFile(file, 'utf8'));
-    content.maintenance ??= defaultMaintenance(); // stores created before this setting existed
+    if (migrateContent(content)) {
+      await persist();
+      console.log('[store] upgraded saved content to the current format');
+    }
   } catch (e) {
     if (e.code !== 'ENOENT') throw e;
     content = defaultContent();

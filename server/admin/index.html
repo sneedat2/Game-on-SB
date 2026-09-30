@@ -235,19 +235,59 @@
     ];
   }
 
-  const gamedaySection = () => listSection({
-    title: 'Gameday', section: 'gameday',
-    hint: 'Upcoming games show in the Home banner with a countdown. Past games drop off automatically.',
-    blank: () => ({ team: 'bengals', opponent: '', homeAway: 'home', startsAt: '', broadcast: '', specials: [] }),
-    fields: (g) => {
-      const specials = { value: (g.specials || []).join('\n') };
-      return [
-        [select(g, 'team', 'Team', TEAMS), text(g, 'opponent', 'Opponent', { maxlength: 40 }), select(g, 'homeAway', 'Home / Away', { home: 'Home (vs)', away: 'Away (@)' })],
-        [when(g, 'startsAt', 'Kickoff'), text(g, 'broadcast', 'TV channel', { maxlength: 40 })],
-        [h('label', {}, 'Specials (one per line)', h('textarea', { value: specials.value, oninput: (e) => (g.specials = e.target.value.split('\n').map((s) => s.trim()).filter(Boolean)) }))],
-      ];
-    },
-  });
+  const linesInput = (obj, key, label) =>
+    h('label', {}, label, h('textarea', { value: (obj[key] || []).join('\n'), oninput: (e) => (obj[key] = e.target.value.split('\n').map((s) => s.trim()).filter(Boolean)) }));
+  const kickoff = (iso, tba) => {
+    const d = new Date(iso);
+    const day = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'America/New_York' });
+    return tba ? `${day} · time TBA` : `${day} · ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' })}`;
+  };
+
+  function gamedaySection() {
+    const gs = structuredClone(content.gamedaySettings ?? { auto: true, teamSpecials: {} });
+    gs.teamSpecials ??= {};
+    const games = structuredClone(content.gameday);
+    const auto = content.autoGames ?? [];
+
+    const list = h('div');
+    const draw = () => list.replaceChildren(...games.map((g, i) => h('div', { class: 'card' },
+      h('div', { class: 'row' }, select(g, 'team', 'Team', TEAMS), text(g, 'opponent', 'Opponent', { maxlength: 40 }), select(g, 'homeAway', 'Home / Away', { home: 'Home (vs)', away: 'Away (@)' })),
+      h('div', { class: 'row' }, when(g, 'startsAt', 'Kickoff'), text(g, 'broadcast', 'TV channel', { maxlength: 40 })),
+      h('div', { class: 'row' }, linesInput(g, 'specials', 'Specials (one per line)')),
+      h('div', { class: 'row' }, h('span', { style: 'flex:1' }), h('button', { class: 'danger small', onclick: () => { games.splice(i, 1); draw(); } }, 'Delete')))));
+    draw();
+
+    const msg = h('span', { class: 'msg' });
+    const save = h('button', { class: 'primary', onclick: async () => {
+      save.disabled = true; msg.className = 'msg'; msg.textContent = 'Saving…';
+      try {
+        const a = await api('/api/admin/gamedaySettings', { method: 'PUT', body: JSON.stringify(gs) });
+        const b = await api('/api/admin/gameday', { method: 'PUT', body: JSON.stringify(games) });
+        content.gamedaySettings = a.gamedaySettings; content.gameday = b.gameday;
+        msg.className = 'msg ok'; msg.textContent = 'Saved ✓ - live in the app within a minute.';
+      } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
+      finally { save.disabled = false; }
+    } }, 'Save changes');
+
+    return [
+      h('h2', {}, 'Gameday'),
+      h('p', { class: 'hint' }, 'Bengals, Bearcats, Reds and FC Cincinnati schedules update automatically. You set the specials shown with each team’s games.'),
+      h('div', { class: 'card' },
+        check(gs, 'auto', 'Pull schedules automatically'),
+        h('div', { style: 'height:10px' }),
+        ...Object.entries(TEAMS).map(([key, name]) => h('div', { class: 'row' }, linesInput(gs.teamSpecials, key, `${name} specials (one per line)`)))),
+      h('div', { class: 'card' },
+        h('strong', {}, 'Coming up (automatic)'),
+        auto.length
+          ? auto.slice(0, 8).map((g) => h('div', { class: 'muted', style: 'margin-top:6px' }, `${TEAMS[g.team]} ${g.homeAway === 'home' ? 'vs' : '@'} ${g.opponent} — ${kickoff(g.startsAt, g.timeTBA)}${g.broadcast ? ` · ${g.broadcast}` : ''}`))
+          : h('div', { class: 'muted', style: 'margin-top:6px' }, 'No upcoming games found right now.')),
+      h('h2', {}, 'Extra games & watch parties'),
+      h('p', { class: 'hint' }, 'Optional. Add anything the schedule doesn’t cover. A game you add for the same team and time replaces the automatic one.'),
+      h('button', { class: 'ghost', onclick: () => { games.unshift({ team: 'bengals', opponent: '', homeAway: 'home', startsAt: '', broadcast: '', specials: [] }); draw(); } }, '+ Add game'),
+      list,
+      h('div', { class: 'bar' }, save, msg),
+    ];
+  }
 
   const comingSoonSection = () => listSection({
     title: 'Coming Soon', section: 'comingSoon', hint: 'Shown on the Menu → Coming Soon tab.',

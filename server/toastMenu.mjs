@@ -114,22 +114,88 @@ function isShown(item, sectionId) {
 }
 const priceOf = (item) => (typeof item.price === 'number' ? item.price : undefined);
 
+// ---------------- Sizes (draft beer pours) ----------------
+// Beers show as one row - "Astra Baja Black" - with each pour listed small by its price
+// ("16 oz $5.50", "20 oz $6.50"). Toast can hold sizes two ways; both are handled:
+//   1. Size pricing: one item whose sizes live in a Size modifier group.
+//   2. Separate items per size: "Astra Baja Black 16oz", "16 oz Astra Baja Black", "Truth (20 oz)".
+
+const SIZE = String.raw`(?:\d{1,2}(?:\.\d)?\s*(?:oz|ounces?)\.?|pint|pitcher)`;
+const SIZE_PREFIX = new RegExp(String.raw`^\(?(${SIZE})\)?\s*[-–:]?\s+(.+)$`, 'i');
+const SIZE_SUFFIX = new RegExp(String.raw`^(.+?)\s*[-–:]?\s*\(?(${SIZE})\)?$`, 'i');
+
+/** "16oz" -> "16 oz", "pint" -> "Pint" */
+function sizeLabel(raw) {
+  const s = String(raw).trim();
+  const oz = /^(\d{1,2}(?:\.\d)?)\s*(?:oz|ounces?)\.?$/i.exec(s);
+  return oz ? `${oz[1]} oz` : s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+const sizeOrder = (label) => parseFloat(label) || { pint: 16, pitcher: 60 }[label.toLowerCase()] || 999;
+
+/** Splits "Truth 16oz" into { base: "Truth", size: "16 oz" }; null if the name has no size. */
+function splitSize(name) {
+  const pre = SIZE_PREFIX.exec(name);
+  if (pre) return { base: pre[2].trim(), size: sizeLabel(pre[1]) };
+  const suf = SIZE_SUFFIX.exec(name);
+  if (suf && suf[1].trim().length > 1) return { base: suf[1].trim(), size: sizeLabel(suf[2]) };
+  return null;
+}
+
+/** Sizes from Toast size pricing (pricingStrategy SIZE_PRICE -> Size modifier group), if any. */
+function makeSizeLookup(menusPayload) {
+  const groups = new Map(Object.values(menusPayload.modifierGroupReferences ?? {}).map((g) => [g.guid, g]));
+  const options = menusPayload.modifierOptionReferences ?? {};
+  return (item) => {
+    const group = groups.get(item.pricingRules?.sizeSpecificPricingGuid);
+    if (!group) return null;
+    const sizes = (group.modifierOptionReferences ?? [])
+      .map((ref) => options[ref])
+      .filter((o) => o && typeof o.price === 'number')
+      .map((o) => ({ label: sizeLabel(o.name), price: o.price }))
+      .sort((a, b) => sizeOrder(a.label) - sizeOrder(b.label));
+    return sizes.length ? sizes : null;
+  };
+}
+
 export function mapToastMenu(menusPayload, outOfStockGuids = new Set()) {
   const items = [];
+  const sizesOf = makeSizeLookup(menusPayload);
+  const pours = new Map(); // "draft|astra baja black" -> merged row
 
   const visitGroup = (group, inheritedSection) => {
     const sectionId = SECTION_FOR[norm(group.name)] ?? inheritedSection;
     if (sectionId) {
       for (const item of group.menuItems ?? []) {
         if (!isShown(item, sectionId)) continue;
+        const name = item.name.trim();
+        const soldOut = outOfStockGuids.has(item.guid);
+
+        // Separate items per pour size -> one row per beer.
+        const split = sectionId === 'draft' && priceOf(item) !== undefined ? splitSize(name) : null;
+        if (split) {
+          const key = `${sectionId}|${split.base.toLowerCase()}`;
+          let row = pours.get(key);
+          if (!row) {
+            row = { id: item.guid, toastGuid: item.guid, sectionId, name: split.base, sizes: [], soldSizes: 0, totalSizes: 0 };
+            pours.set(key, row);
+            items.push(row); // keeps Toast's order
+          }
+          row.totalSizes++;
+          if (soldOut) row.soldSizes++;
+          else row.sizes.push({ label: split.size, price: priceOf(item) });
+          if (!row.description && item.description?.trim()) row.description = item.description.trim();
+          continue;
+        }
+
         items.push({
           id: item.guid,
           toastGuid: item.guid,
           sectionId,
-          name: item.name.trim(),
+          name,
           description: item.description?.trim() || undefined,
           price: priceOf(item),
-          soldOut: outOfStockGuids.has(item.guid) || undefined,
+          sizes: sizesOf(item) ?? undefined,
+          soldOut: soldOut || undefined,
         });
       }
     }
@@ -139,6 +205,15 @@ export function mapToastMenu(menusPayload, outOfStockGuids = new Set()) {
   for (const menu of menusPayload.menus ?? []) {
     const menuSection = SECTION_FOR[norm(menu.name)]; // e.g. "LENT MENU" with items directly under it
     for (const group of menu.menuGroups ?? []) visitGroup(group, menuSection);
+  }
+
+  // Finish merged pour rows: sort sizes small -> large; sold out only when every size is.
+  for (const row of pours.values()) {
+    row.sizes.sort((a, b) => sizeOrder(a.label) - sizeOrder(b.label));
+    row.soldOut = row.soldSizes === row.totalSizes || undefined;
+    delete row.soldSizes;
+    delete row.totalSizes;
+    if (row.sizes.length === 0) delete row.sizes;
   }
   return items;
 }

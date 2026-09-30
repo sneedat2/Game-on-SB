@@ -13,6 +13,7 @@
 import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import { adminEnabled, checkPassword, issueToken, loginAllowed, recordFailure, verifyToken } from './auth.mjs';
+import { upcomingAutoGames } from './schedule.mjs';
 import { getContent, storageIsPersistent, update } from './store.mjs';
 
 const BAR_TZ = 'America/New_York';
@@ -149,6 +150,16 @@ const validators = {
     });
   },
 
+  gamedaySettings(v) {
+    const specials = {};
+    for (const team of TEAMS) {
+      specials[team] = list(v?.teamSpecials?.[team] ?? [], `${team} specials`, 6)
+        .map((s, j) => str(s, `${team} special ${j + 1}`, 80, { required: false }))
+        .filter(Boolean);
+    }
+    return { auto: Boolean(v?.auto), teamSpecials: specials };
+  },
+
   gameday(v) {
     return list(v, 'Games', 30).map((g, i) => ({
       id: keepId(g?.id),
@@ -156,6 +167,7 @@ const validators = {
       opponent: str(g?.opponent, `Game ${i + 1} opponent`, 40),
       homeAway: oneOf(g?.homeAway, `Game ${i + 1} home/away`, ['home', 'away']),
       startsAt: isoDate(g?.startsAt, `Game ${i + 1} start time`),
+      timeTBA: Boolean(g?.timeTBA) || undefined,
       broadcast: str(g?.broadcast, `Game ${i + 1} TV channel`, 40, { required: false }),
       specials: list(g?.specials ?? [], `Game ${i + 1} specials`, 6)
         .map((s, j) => str(s, `Game ${i + 1} special ${j + 1}`, 80, { required: false }))
@@ -215,11 +227,26 @@ const openPolls = (c) =>
     .filter((p) => !p.hidden && Date.parse(p.closesAt) > Date.now())
     .sort((a, b) => Number(b.featured) - Number(a.featured) || Date.parse(a.closesAt) - Date.parse(b.closesAt));
 
-function publicContent(c) {
+/**
+ * Games for the Home banner: ESPN schedules (with the admin's per-team specials) plus any games the
+ * admin added by hand. A hand-added game for the same team within 6 hours replaces the ESPN one,
+ * so the admin can override details like the TV channel or specials for a big game.
+ */
+async function gamedayGames(c) {
   const since = Date.now() - 4 * 3600_000; // keep a game up for ~4h after kickoff
+  const manual = c.gameday.filter((g) => Date.parse(g.startsAt) > since);
+  const auto = c.gamedaySettings?.auto
+    ? (await upcomingAutoGames())
+        .filter((a) => !manual.some((m) => m.team === a.team && Math.abs(Date.parse(m.startsAt) - Date.parse(a.startsAt)) < 6 * 3600_000))
+        .map((a) => ({ ...a, specials: c.gamedaySettings.teamSpecials?.[a.team] ?? [] }))
+    : [];
+  return [...manual, ...auto].sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
+}
+
+async function publicContent(c) {
   return {
     settings: c.settings,
-    gameday: c.gameday.filter((g) => Date.parse(g.startsAt) > since).sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt)).slice(0, 6),
+    gameday: (await gamedayGames(c)).slice(0, 6),
     comingSoon: c.comingSoon,
     showcase: c.showcase,
   };
@@ -240,7 +267,7 @@ export async function handleContentApi(req, res, path) {
     if (isPublic && req.method === 'OPTIONS') return send(res, 204, null, { cors: true }), true;
 
     if (path === '/api/content' && req.method === 'GET') {
-      return send(res, 200, publicContent(c), { cors: true, cache: 'public, max-age=30' }), true;
+      return send(res, 200, await publicContent(c), { cors: true, cache: 'public, max-age=30' }), true;
     }
 
     if (path === '/api/flash-deal' && req.method === 'GET') {
@@ -303,10 +330,11 @@ export async function handleContentApi(req, res, path) {
       if (!verifyToken(token)) throw new HttpError(401, 'Please sign in again');
 
       if (path === '/api/admin/content' && req.method === 'GET') {
-        return send(res, 200, { ...c, polls: c.polls.map((p) => pollView(p, c)), voters: undefined, storageIsPersistent }), true;
+        const autoGames = await upcomingAutoGames();
+        return send(res, 200, { ...c, polls: c.polls.map((p) => pollView(p, c)), voters: undefined, storageIsPersistent, autoGames }), true;
       }
 
-      const section = /^\/api\/admin\/(maintenance|settings|flashDeals|polls|gameday|comingSoon|showcase)$/.exec(path)?.[1];
+      const section = /^\/api\/admin\/(maintenance|settings|flashDeals|polls|gamedaySettings|gameday|comingSoon|showcase)$/.exec(path)?.[1];
       if (section && req.method === 'PUT') {
         const clean = validators[section](await readJson(req));
         await update((draft) => {
