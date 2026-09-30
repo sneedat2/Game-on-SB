@@ -1,4 +1,5 @@
-import { BAR, FLASH_DEAL, HAPPY_HOUR } from '@/constants/bar';
+import { BAR } from '@/constants/bar';
+import { getSettings, toSeconds, type BarSettings } from '@/services/settings';
 
 // All bar logic (happy hour, flash deal window) runs on the bar's wall clock, not the phone's,
 // so a fan checking the app from out of town still sees the right countdown.
@@ -44,8 +45,8 @@ export function barDateKey(now: Date = new Date()): string {
 }
 
 /**
- * Weekday flow at the bar (Mon–Fri): before 3 PM → happy hour 3–6 PM → 6 PM Surprise 6–7 PM.
- * After 7 PM and all weekend it's 'off' until the next weekday's happy hour.
+ * Happy-hour-day flow (default Mon–Fri): before happy hour → happy hour (3–6 PM) → surprise
+ * (6–7 PM). After that, and on non-happy-hour days, it's 'off' until the next happy hour.
  */
 export type FlashDealPhase = 'before' | 'happy-hour' | 'live' | 'off';
 
@@ -65,26 +66,28 @@ function barWeekday(c: WallClock): number {
   return new Date(Date.UTC(c.year, c.month - 1, c.day)).getUTCDay();
 }
 
-const isHappyHourDay = (weekday: number) => (HAPPY_HOUR.days as readonly number[]).includes(weekday);
-
-/** Days from today until the first happy-hour weekday whose `atSeconds` hasn't passed yet. */
-function daysUntilWeekdayAt(weekday: number, secondsIntoDay: number, atSeconds: number): number {
+/** Days from today until the first happy-hour day whose `atSeconds` hasn't passed yet. */
+function daysUntilWeekdayAt(days: number[], weekday: number, secondsIntoDay: number, atSeconds: number): number {
   for (let d = 0; d <= 7; d++) {
-    if (isHappyHourDay((weekday + d) % 7) && (d > 0 || secondsIntoDay < atSeconds)) return d;
+    if (days.includes((weekday + d) % 7) && (d > 0 || secondsIntoDay < atSeconds)) return d;
   }
-  return 7; // unreachable while HAPPY_HOUR.days is non-empty
+  return 7; // only when no happy-hour days are set
 }
 
-export function getFlashDealState(now: Date = new Date()): FlashDealState {
+/** Happy hour days/times come from the admin-editable settings (services/settings.ts). */
+export function getFlashDealState(now: Date = new Date(), settings: BarSettings = getSettings()): FlashDealState {
+  const { days } = settings.happyHour;
   const c = barWallClock(now);
   const weekday = barWeekday(c);
   const sid = c.hour * 3600 + c.minute * 60 + c.second;
-  const startS = HAPPY_HOUR.startHour * 3600;
-  const unlockS = FLASH_DEAL.unlockHour * 3600;
-  const endS = unlockS + FLASH_DEAL.durationMinutes * 60;
+  const startS = toSeconds(settings.happyHour.start);
+  const unlockS = toSeconds(settings.happyHour.end);
+  const endS = unlockS + settings.surpriseMinutes * 60;
+  const isHappyHourDay = (d: number) => days.includes(d);
+  const daysUntilWeekdayAtFor = (at: number) => daysUntilWeekdayAt(days, weekday, sid, at);
   const ms = (s: number) => s * 1000 - now.getMilliseconds();
 
-  const unlockDays = daysUntilWeekdayAt(weekday, sid, unlockS);
+  const unlockDays = daysUntilWeekdayAtFor(unlockS);
   const nextUnlockAt = new Date(now.getTime() + ms(unlockDays * DAY_S - sid + unlockS));
   const base = { nextUnlockAt, daysUntilNextHappyHour: 0 };
 
@@ -93,8 +96,8 @@ export function getFlashDealState(now: Date = new Date()): FlashDealState {
     if (sid < unlockS) return { ...base, phase: 'happy-hour', msRemaining: ms(unlockS - sid) };
     if (sid < endS) return { ...base, phase: 'live', msRemaining: ms(endS - sid) };
   }
-  const days = daysUntilWeekdayAt(weekday, sid, startS);
-  return { ...base, phase: 'off', msRemaining: ms(days * DAY_S - sid + startS), daysUntilNextHappyHour: days };
+  const waitDays = daysUntilWeekdayAtFor(startS);
+  return { ...base, phase: 'off', msRemaining: ms(waitDays * DAY_S - sid + startS), daysUntilNextHappyHour: waitDays };
 }
 
 const weekdayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];

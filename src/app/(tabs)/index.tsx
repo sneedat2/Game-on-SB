@@ -13,7 +13,7 @@ import { pollsService } from '@/services/polls';
 export default function HomeScreen() {
   const games = useAsync(() => gamedayService.upcoming(4));
   const polls = useAsync(async () => {
-    const [list, mine] = await Promise.all([pollsService.listActive(), pollsService.myVotes()]);
+    const { polls: list, mine } = await pollsService.load();
     return { poll: list.find((p) => p.featured) ?? list[0], mine };
   });
 

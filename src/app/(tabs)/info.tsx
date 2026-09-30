@@ -2,7 +2,11 @@
 import { Camera, Clock, MapPin, Navigation, Phone, ShoppingBag, Users, type LucideIcon } from 'lucide-react-native';
 import { Pressable, Text, View } from 'react-native';
 import { Button, Card, Screen, SectionHeader } from '@/components/ui';
-import { BAR, HAPPY_HOUR } from '@/constants/bar';
+import { useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
+import { BAR } from '@/constants/bar';
+import { loadContent } from '@/services/content';
+import { formatTime, happyHourLabel, useSettings } from '@/services/settings';
 import { colors } from '@/constants/theme';
 import { callBar, openDirections, openExternal, openOnlineOrdering } from '@/services/ordering';
 
@@ -23,6 +27,14 @@ function LinkRow({ icon: Icon, label, detail, onPress }: { icon: LucideIcon; lab
 
 export default function InfoScreen() {
   const { street, city, state, zip } = BAR.address;
+  const settings = useSettings();
+
+  // Pick up admin edits to hours/happy hour when this tab is opened.
+  useFocusEffect(
+    useCallback(() => {
+      void loadContent().catch(() => {});
+    }, []),
+  );
   return (
     <Screen title="Bar Info" subtitle="Come for the game, stay for the wings.">
       <Card className="gap-4">
@@ -50,19 +62,25 @@ export default function InfoScreen() {
           <Clock size={16} color={colors.gold} />
           <Text className="text-lg font-extrabold text-chalk">Kitchen Hours</Text>
         </View>
-        {BAR.hours.map((h) => (
-          <View key={h.days} className="flex-row justify-between py-1.5">
+        {settings.hours.map((h, i) => (
+          <View key={`${h.days}-${i}`} className="flex-row justify-between py-1.5">
             <Text className="text-chalk">{h.days}</Text>
             <Text className="text-muted">
               {h.open} – {h.close}
             </Text>
           </View>
         ))}
-        <View className="mt-3 flex-row items-center justify-between rounded-xl bg-brand px-3 py-2.5">
-          <Text className="font-black text-ink">Happy Hour</Text>
-          <Text className="font-bold text-ink">{HAPPY_HOUR.label}</Text>
-        </View>
-        <Text className="mt-2 text-xs text-muted">When happy hour ends at 6, a 1-hour surprise deal drops in the app.</Text>
+        {settings.happyHour.days.length > 0 ? (
+          <>
+            <View className="mt-3 flex-row items-center justify-between rounded-xl bg-brand px-3 py-2.5">
+              <Text className="font-black text-ink">Happy Hour</Text>
+              <Text className="font-bold text-ink">{happyHourLabel(settings)}</Text>
+            </View>
+            <Text className="mt-2 text-xs text-muted">
+              When happy hour ends at {formatTime(settings.happyHour.end)}, a surprise deal drops in the app.
+            </Text>
+          </>
+        ) : null}
       </Card>
 
       <View>

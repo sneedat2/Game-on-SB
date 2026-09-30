@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import { colors } from '@/constants/theme';
 import { barDateKey, getFlashDealState } from '@/lib/time';
 import { config, isLive } from './config';
+import { formatTime, getSettings } from './settings';
 import { readJSON, writeJSON } from './storage';
 import { ensureSession, supabase } from './supabase';
 
@@ -61,13 +62,18 @@ export async function scheduleFlashDealAlerts(): Promise<void> {
       .map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier)),
   );
 
-  let unlockAt = getFlashDealState().nextUnlockAt;
+  // Uses the admin-edited happy hour (days + end time); nothing to schedule if it's turned off.
+  const settings = getSettings();
+  if (settings.happyHour.days.length === 0) return;
+  const unlockLabel = formatTime(settings.happyHour.end);
+
+  let unlockAt = getFlashDealState(new Date(), settings).nextUnlockAt;
   for (let i = 0; i < UNLOCKS_AHEAD; i++) {
     await Notifications.scheduleNotificationAsync({
       identifier: `${ID_PREFIX}${barDateKey(unlockAt)}`,
       content: {
-        title: '🔓 The 6 PM Surprise is live!',
-        body: 'Happy hour just ended - tap to see tonight\'s 1-hour flash deal at Game On.',
+        title: `🔓 The ${unlockLabel} Surprise is live!`,
+        body: 'Happy hour just ended - tap to see tonight\'s flash deal at Game On.',
         data: { url: '/' },
       },
       trigger: {
@@ -76,7 +82,7 @@ export async function scheduleFlashDealAlerts(): Promise<void> {
         channelId: CHANNEL_ID,
       },
     });
-    unlockAt = getFlashDealState(new Date(unlockAt.getTime() + 2 * 3600_000)).nextUnlockAt;
+    unlockAt = getFlashDealState(new Date(unlockAt.getTime() + 60_000), settings).nextUnlockAt;
   }
 }
 

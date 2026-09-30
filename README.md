@@ -54,13 +54,36 @@ supabase/
   seed.sql
   functions/toast-proxy      Toast loyalty lookup (not connected yet - see below)
 server/
-  index.mjs            Railway web server: serves dist/ + GET /api/menu, /api/health
+  index.mjs            Railway web server: dist/, /admin, tester lock, /api/menu, /api/health
+  api.mjs              content API: /api/content, /api/polls (+ voting), /api/flash-deal, /api/admin/*
+  admin/index.html     the admin editor page
+  auth.mjs             admin password sign-in + tester lock (SITE_USERS)
+  store.mjs            JSON content store (on the Railway volume)
+  defaults.mjs         starter content for a fresh store
   toastMenu.mjs        Toast login, menu + stock fetch, mapping to app sections
   functions/flash-deal-push  6 PM Expo push blast (pg_cron)
 ```
 
 Screens only talk to `services/*`. Each service exports a single object that is either the mock or
 the live implementation, so going live changes no UI code.
+
+## Admin editor & tester lock (Railway)
+
+`https://<your-site>/admin` → **App Status** opens/closes the app: while closed, guests get a
+"Be right back" page (with your message) and a signed-in admin still sees the real app
+(`server/maintenance.mjs`). The admin also edits hours, happy hour, the 6 PM Surprise deals, polls (with live
+results), gameday games, Coming Soon and "We Made It Happen". Poll votes are counted on the server,
+one per phone. Set these in **Railway → Variables**:
+
+| Variable | Purpose |
+| --- | --- |
+| `ADMIN_PASSWORD` | Admin sign-in (8+ characters). Unset = admin off. Changing it signs everyone out. |
+| `SITE_USERS` | Tester lock: `name:password,name2:password2`. Every page asks for a login. Delete the variable to open the site to everyone. |
+
+**Attach a Volume** to the service (mount path `/data`) so edits and votes survive redeploys —
+Railway exposes it as `RAILWAY_VOLUME_MOUNT_PATH`, which `server/store.mjs` uses automatically.
+The admin page shows a warning while no volume is attached. Without the server (e.g.
+`npx expo start`), the app uses built-in sample content.
 
 ## Going live
 

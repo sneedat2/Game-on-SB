@@ -7,15 +7,18 @@ import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors } from '@/constants/theme';
+import { loadContent } from '@/services/content';
 import { flashAlertsEnabled, initNotifications, registerPushToken, scheduleFlashDealAlerts } from '@/services/notifications';
 
 initNotifications();
 
 function useNotificationBootstrap() {
   useEffect(() => {
+    // Load admin-edited settings (hours, happy hour) early so every screen starts with them.
+    const contentReady = loadContent().catch(() => null);
     if (Platform.OS === 'web') return;
-    // Keep the rolling week of 6 PM alerts topped up every launch.
-    void flashAlertsEnabled().then((on) => {
+    // Keep the rolling week of surprise alerts topped up every launch (after settings arrive).
+    void Promise.all([flashAlertsEnabled(), contentReady]).then(([on]) => {
       if (on) {
         void scheduleFlashDealAlerts();
         void registerPushToken();

@@ -3,7 +3,6 @@ import { Bell, BellOff, Beer, Clock, Gift, PartyPopper } from 'lucide-react-nati
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Platform, Pressable, Text, View } from 'react-native';
 import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
-import { HAPPY_HOUR } from '@/constants/bar';
 import { colors } from '@/constants/theme';
 import { useNow } from '@/hooks/useNow';
 import {
@@ -17,6 +16,7 @@ import {
 } from '@/lib/time';
 import { gamedayService } from '@/services/gameday';
 import { flashAlertsEnabled, setFlashDealAlerts } from '@/services/notifications';
+import { formatTime, happyHourLabel, useSettings } from '@/services/settings';
 import type { FlashDeal } from '@/types';
 
 const PREVIEW_ORDER: (FlashDealPhase | null)[] = [null, 'before', 'happy-hour', 'live', 'off'];
@@ -37,10 +37,14 @@ function BigClock({ ms, long }: { ms: number; long?: boolean }) {
 
 export function FlashDealWidget() {
   const now = useNow();
+  const settings = useSettings();
+  const hhLabel = happyHourLabel(settings);
+  const unlockTime = formatTime(settings.happyHour.end);
+  const surpriseLength = settings.surpriseMinutes === 60 ? '1-hour' : `${settings.surpriseMinutes}-minute`;
   const [previewIndex, setPreviewIndex] = useState(0); // dev-only phase preview (long-press)
   const [deal, setDeal] = useState<FlashDeal | null>();
   const [alertsOn, setAlertsOn] = useState(false);
-  const real = getFlashDealState(now);
+  const real = getFlashDealState(now, settings);
   const preview = PREVIEW_ORDER[previewIndex];
   const phase = preview ?? real.phase;
   const prevPhase = useRef(phase);
@@ -81,6 +85,9 @@ export function FlashDealWidget() {
   const nextDayLabel = preview ? 'Monday' : nextHappyHourLabel(real.daysUntilNextHappyHour, now);
   const highlighted = phase === 'live' || phase === 'happy-hour';
 
+  // Admin turned happy hour off entirely (no days selected).
+  if (settings.happyHour.days.length === 0) return null;
+
   return (
     <Pressable
       onLongPress={__DEV__ ? () => setPreviewIndex((i) => (i + 1) % PREVIEW_ORDER.length) : undefined}
@@ -114,7 +121,7 @@ export function FlashDealWidget() {
           <Text className="mt-3 text-sm text-muted">Happy hour starts in</Text>
           <BigClock ms={msRemaining} />
           <Text className="mt-2 text-center text-xs text-muted">
-            {HAPPY_HOUR.label} · then a 1-hour surprise deal unlocks at 6.
+            {hhLabel} · then a {surpriseLength} surprise deal unlocks at {unlockTime}.
           </Text>
         </View>
       ) : null}
@@ -127,7 +134,7 @@ export function FlashDealWidget() {
           <Text className="mt-3 text-2xl font-black text-brand">Happy Hour is ON</Text>
           <Text className="mt-1 text-sm text-muted">Tonight’s surprise unlocks in</Text>
           <BigClock ms={msRemaining} />
-          <Text className="mt-2 text-center text-xs text-muted">Until 6 PM. Be here or be square.</Text>
+          <Text className="mt-2 text-center text-xs text-muted">Until {unlockTime}. Be here or be square.</Text>
         </View>
       ) : null}
 
@@ -156,10 +163,12 @@ export function FlashDealWidget() {
       {phase === 'off' ? (
         <View className="mt-4 items-center">
           <Text className="text-center text-base font-semibold text-chalk">
-            Happy hour is back {nextDayLabel} at 3 PM
+            Happy hour is back {nextDayLabel} at {formatTime(settings.happyHour.start)}
           </Text>
           <BigClock ms={msRemaining} long />
-          <Text className="mt-2 text-center text-xs text-muted">{HAPPY_HOUR.label} · surprise deal at 6.</Text>
+          <Text className="mt-2 text-center text-xs text-muted">
+            {hhLabel} · surprise deal at {unlockTime}.
+          </Text>
         </View>
       ) : null}
 

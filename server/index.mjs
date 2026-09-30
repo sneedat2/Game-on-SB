@@ -1,14 +1,24 @@
-// Production web server (Railway): serves the exported web app from dist/ and a small API.
-//   GET /api/menu    live Toast menu (cached 5 min; keeps serving the last good copy if Toast is down)
+// Production web server (Railway): serves the exported web app from dist/, the admin editor, and a small API.
+//   GET /api/menu         live Toast menu (cached 5 min; keeps serving the last good copy if Toast is down)
 //   GET /api/menu/groups  setup helper: Toast group names and where each lands in the app
-//   GET /api/health  health check for Railway
+//   /api/content, /api/polls, /api/flash-deal, /api/admin/*  admin-editable content (see api.mjs)
+//   GET /admin            the admin editor (ADMIN_PASSWORD)
+//   GET /api/health       health check for Railway
+// While SITE_USERS is set, everything except /api/health requires a tester login (see auth.mjs).
+// While /admin → App Status is "Closed", guests get a "be right back" page (see maintenance.mjs).
+import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import handler from 'serve-handler';
+import { handleContentApi, hasAdminCookie } from './api.mjs';
+import { bypassesMaintenance, maintenanceOn, sendMaintenance } from './maintenance.mjs';
+import { checkSiteLogin, loginAllowed, recordFailure, siteLocked } from './auth.mjs';
+import { loadStore } from './store.mjs';
 import { fetchToastGroups, fetchToastMenu, ToastConfigError } from './toastMenu.mjs';
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const here = dirname(fileURLToPath(import.meta.url));
+const root = join(here, '..');
 const PORT = Number(process.env.PORT) || 3000;
 const MENU_TTL_MS = 5 * 60_000;
 
@@ -45,8 +55,30 @@ function sendJson(res, status, body, extraHeaders = {}) {
   res.end(JSON.stringify(body));
 }
 
+const clientIp = (req) => String(req.headers['x-forwarded-for'] ?? req.socket.remoteAddress ?? '').split(',')[0].trim();
+
+/** Tester lock: returns true if the request may continue. */
+function passesSiteLock(req, res, path) {
+  if (!siteLocked() || path === '/api/health') return true;
+  if (req.method === 'OPTIONS') return true; // CORS preflight carries no credentials
+  const ip = clientIp(req);
+  if (checkSiteLogin(req.headers.authorization)) return true;
+  if (req.headers.authorization) recordFailure(ip);
+  const status = loginAllowed(ip) ? 401 : 429;
+  res.writeHead(status, {
+    'Content-Type': 'text/plain; charset=utf-8',
+    'X-Robots-Tag': 'noindex',
+    ...(status === 401 ? { 'WWW-Authenticate': 'Basic realm="Game On - testers only", charset="UTF-8"' } : {}),
+  });
+  res.end(status === 401 ? 'Game On is in private testing. Ask the bar for a tester login.' : 'Too many attempts. Try again in 15 minutes.');
+  return false;
+}
+
 const server = createServer(async (req, res) => {
   const path = new URL(req.url ?? '/', 'http://localhost').pathname;
+  if (!passesSiteLock(req, res, path)) return;
+  if (siteLocked()) res.setHeader('X-Robots-Tag', 'noindex');
+  if (maintenanceOn() && !bypassesMaintenance(path) && !hasAdminCookie(req)) return sendMaintenance(res, path);
 
   if (path === '/api/health') return sendJson(res, 200, { ok: true });
 
@@ -73,7 +105,20 @@ const server = createServer(async (req, res) => {
     }
   }
 
+  if (await handleContentApi(req, res, path)) return;
+
   if (path.startsWith('/api/')) return sendJson(res, 404, { error: 'Not found' });
+
+  if (path === '/admin' || path === '/admin/') {
+    res.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Frame-Options': 'DENY',
+      'X-Robots-Tag': 'noindex',
+      'Content-Security-Policy': "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'",
+    });
+    return res.end(await readFile(join(here, 'admin', 'index.html')));
+  }
 
   // Everything else: the exported web app. Unknown paths fall back to index.html (client-side routes).
   return handler(req, res, {
@@ -83,4 +128,7 @@ const server = createServer(async (req, res) => {
   });
 });
 
-server.listen(PORT, '0.0.0.0', () => console.log(`Game On web server listening on :${PORT}`));
+await loadStore();
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Game On web server listening on :${PORT}${siteLocked() ? ' (tester lock ON)' : ''}`);
+});

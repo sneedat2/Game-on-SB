@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Alert, ScrollView, Text } from 'react-native';
 import { categoryLabels, PollCard } from '@/components/PollCard';
 import { ShowcaseCard } from '@/components/ShowcaseCard';
@@ -14,14 +15,23 @@ export default function PollsScreen() {
   const [filter, setFilter] = useState<'all' | PollCategory>('all');
 
   const polls = useAsync(async () => {
-    const [list, mine] = await Promise.all([pollsService.listActive(), pollsService.myVotes()]);
+    const { polls: list, mine } = await pollsService.load();
     return { list, mine };
   });
   const showcase = useAsync(() => pollsService.showcase());
 
-  // Realtime: refresh counts when anyone votes (no-op in mock mode).
+  // Fresh vote counts (and newly added polls) each time the tab is opened again.
   const { reload: reloadPolls } = polls;
-  useEffect(() => pollsService.subscribe(() => void reloadPolls()), [reloadPolls]);
+  const firstFocus = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (firstFocus.current) {
+        firstFocus.current = false;
+        return;
+      }
+      void reloadPolls();
+    }, [reloadPolls]),
+  );
 
   const visible = useMemo(
     () => (polls.data?.list ?? []).filter((p) => filter === 'all' || p.category === filter),

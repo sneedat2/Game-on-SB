@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>Game On Admin</title>
+<style>
+  :root { --bg:#0A0A0A; --card:#151515; --card2:#1F1F1F; --line:#2C2C2C; --text:#F5F5F5; --muted:#A3A3A3; --brand:#FFC72C; --danger:#EF4444; --ok:#22C55E; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  header { background:var(--brand); color:#0A0A0A; padding:14px 16px; font-weight:900; letter-spacing:2px; display:flex; justify-content:space-between; align-items:center; }
+  header button { background:#0A0A0A; color:var(--brand); }
+  main { max-width:860px; margin:0 auto; padding:16px; }
+  h2 { margin:8px 0 4px; font-size:22px; }
+  p.hint { color:var(--muted); margin:0 0 14px; font-size:13px; }
+  nav { display:flex; gap:6px; overflow-x:auto; padding-bottom:6px; margin-bottom:12px; }
+  nav button { background:var(--card); color:var(--text); border:1px solid var(--line); white-space:nowrap; }
+  nav button.active { background:var(--brand); color:#0A0A0A; border-color:var(--brand); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-bottom:8px; }
+  .row > label { flex:1 1 160px; }
+  label { display:block; font-size:12px; color:var(--muted); font-weight:600; }
+  label.check { display:flex; gap:6px; align-items:center; color:var(--text); font-size:14px; flex:0 0 auto; }
+  input, select, textarea { width:100%; margin-top:4px; background:var(--card2); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:9px 10px; font:inherit; }
+  input[type=checkbox] { width:auto; margin:0; accent-color:var(--brand); }
+  textarea { min-height:70px; resize:vertical; }
+  button { cursor:pointer; border:0; border-radius:10px; padding:9px 14px; font:inherit; font-weight:700; }
+  .primary { background:var(--brand); color:#0A0A0A; }
+  .ghost { background:transparent; color:var(--brand); border:1px dashed var(--line); }
+  .danger { background:transparent; color:var(--danger); border:1px solid #4a1d1d; }
+  .small { padding:6px 10px; font-size:13px; }
+  .bar { position:sticky; bottom:0; background:linear-gradient(transparent, var(--bg) 30%); padding:16px 0 8px; display:flex; gap:10px; align-items:center; }
+  .msg { font-size:14px; }
+  .msg.ok { color:var(--ok); } .msg.err { color:var(--danger); }
+  .banner { background:#3a2a00; border:1px solid var(--brand); color:var(--brand); padding:10px 12px; border-radius:10px; margin-bottom:12px; font-size:14px; }
+  .opt { display:grid; grid-template-columns:64px 1fr 70px auto; gap:6px; align-items:center; margin-top:6px; }
+  .votes { color:var(--muted); font-size:13px; text-align:right; }
+  .login { max-width:360px; margin:60px auto; }
+  .muted { color:var(--muted); }
+  .banner.closed { background:#3a1111; border-color:var(--danger); color:#fca5a5; }
+  button.closed { background:var(--danger); color:#fff; }
+  .toast { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--brand); color:#0A0A0A; font-weight:700; padding:10px 16px; border-radius:10px; box-shadow:0 6px 24px rgba(0,0,0,.5); z-index:10; }
+</style>
+</head>
+<body>
+<header><span>GAME ON · ADMIN</span><span id="headerRight"></span></header>
+<main id="app"></main>
+<script>
+(() => {
+  'use strict';
+  const app = document.getElementById('app');
+  const headerRight = document.getElementById('headerRight');
+  const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const TEAMS = { bengals: 'Bengals', bearcats: 'Bearcats', reds: 'Reds', fcc: 'FC Cincinnati' };
+  const CATEGORIES = { food: 'Food', drinks: 'Drinks', events: 'Events', debates: 'Fun Debates' };
+  const STATUS = { 'on-menu': 'On the menu', 'coming-soon': 'Coming soon', 'event-booked': 'Event booked' };
+
+  let token = null;
+  try { token = sessionStorage.getItem('gameon-admin'); } catch {}
+  let content = null;
+  let tab = 'status';
+
+  // Safe DOM builder - user text only ever goes in via textContent/value.
+  function h(tag, props = {}, ...kids) {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(props)) {
+      if (k === 'class') el.className = v;
+      else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+      else if (k === 'value') el.value = v ?? '';
+      else if (k === 'checked') el.checked = Boolean(v);
+      else if (v !== undefined && v !== null && v !== false) el.setAttribute(k, v === true ? '' : v);
+    }
+    for (const kid of kids.flat()) if (kid !== null && kid !== undefined && kid !== false) el.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
+    return el;
+  }
+
+  async function api(path, opts = {}) {
+    const res = await fetch(path, {
+      ...opts,
+      headers: { 'Content-Type': 'application/json', ...(token ? { 'X-Admin-Token': token } : {}) },
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.status === 401 && path !== '/api/admin/login') { logout(); throw new Error('Please sign in again'); }
+    if (!res.ok) throw new Error(body.error || `Error ${res.status}`);
+    return body;
+  }
+
+  function toast(message) {
+    const el = h('div', { class: 'toast' }, message);
+    document.body.append(el);
+    setTimeout(() => el.remove(), 3500);
+  }
+
+  function logout() {
+    if (token) fetch('/api/admin/logout', { method: 'POST' }).catch(() => {}); // clears the app-preview cookie
+    token = null;
+    try { sessionStorage.removeItem('gameon-admin'); } catch {}
+    renderLogin();
+  }
+
+  // ---------- inputs bound to an object ----------
+  const text = (obj, key, label, attrs = {}) => h('label', {}, label, h('input', { value: obj[key], ...attrs, oninput: (e) => (obj[key] = e.target.value) }));
+  const area = (obj, key, label) => h('label', {}, label, h('textarea', { value: obj[key], oninput: (e) => (obj[key] = e.target.value) }));
+  const num = (obj, key, label, attrs = {}) => h('label', {}, label, h('input', { type: 'number', value: obj[key], ...attrs, oninput: (e) => (obj[key] = e.target.value === '' ? '' : Number(e.target.value)) }));
+  const check = (obj, key, label) => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: obj[key], onchange: (e) => (obj[key] = e.target.checked) }), label);
+  const select = (obj, key, label, options) =>
+    h('label', {}, label, h('select', { onchange: (e) => (obj[key] = e.target.value) }, Object.entries(options).map(([v, t]) => h('option', { value: v, selected: obj[key] === v }, t))));
+  const pad = (n) => String(n).padStart(2, '0');
+  const toLocal = (iso) => { if (!iso) return ''; const d = new Date(iso); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  const when = (obj, key, label) => h('label', {}, label, h('input', { type: 'datetime-local', value: toLocal(obj[key]), oninput: (e) => (obj[key] = e.target.value ? new Date(e.target.value).toISOString() : '') }));
+
+  function saveBar(section, getBody) {
+    const msg = h('span', { class: 'msg' });
+    const btn = h('button', { class: 'primary', onclick: async () => {
+      btn.disabled = true; msg.className = 'msg'; msg.textContent = 'Saving…';
+      try {
+        const res = await api(`/api/admin/${section}`, { method: 'PUT', body: JSON.stringify(getBody()) });
+        content[section] = res[section];
+        msg.className = 'msg ok'; msg.textContent = 'Saved ✓ - live in the app within a minute.';
+        if (section === 'polls') { render(); toast('Polls saved ✓ - live in the app within a minute.'); } // redraw picks up new ids
+        if (section === 'maintenance') { render(); toast(res.maintenance.enabled ? 'App is now CLOSED to guests' : 'App is OPEN ✓'); }
+      } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
+      finally { btn.disabled = false; }
+    } }, 'Save changes');
+    return h('div', { class: 'bar' }, btn, msg);
+  }
+
+  // ---------- sections ----------
+  function statusSection() {
+    const m = structuredClone(content.maintenance ?? { enabled: false, message: '' });
+    const choice = h('div', { class: 'row' });
+    const drawChoice = () => choice.replaceChildren(
+      h('button', { class: m.enabled ? 'ghost' : 'primary', onclick: () => { m.enabled = false; drawChoice(); } }, '🟢 Open'),
+      h('button', { class: m.enabled ? 'primary closed' : 'ghost', onclick: () => { m.enabled = true; drawChoice(); } }, '🔴 Closed for maintenance'));
+    drawChoice();
+    return [
+      h('h2', {}, 'App Status'),
+      h('p', { class: 'hint' }, 'Closed = guests see a “Be right back” page instead of the app. You can still use the app while signed in here. Tester logins (SITE_USERS) still apply either way.'),
+      h('div', { class: 'card' }, choice, area(m, 'message', 'Message guests see while closed')),
+      saveBar('maintenance', () => m),
+    ];
+  }
+
+  function hoursSection() {
+    const s = structuredClone(content.settings);
+    const rows = h('div');
+    const drawRows = () => rows.replaceChildren(...s.hours.map((r, i) => h('div', { class: 'row' },
+      text(r, 'days', 'Days', { placeholder: 'Mon–Sat' }), text(r, 'open', 'Opens', { placeholder: '11 AM' }), text(r, 'close', 'Closes', { placeholder: '9:30 PM' }),
+      h('button', { class: 'danger small', onclick: () => { s.hours.splice(i, 1); drawRows(); } }, 'Remove'))));
+    drawRows();
+    const dayBoxes = DAYS.map((d, i) => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: s.happyHour.days.includes(i), onchange: (e) => {
+      s.happyHour.days = e.target.checked ? [...s.happyHour.days, i] : s.happyHour.days.filter((x) => x !== i);
+    } }), d));
+    return [
+      h('h2', {}, 'Hours & Happy Hour'),
+      h('p', { class: 'hint' }, 'Shown on the Info tab. Happy hour also drives the countdown card on Home.'),
+      h('div', { class: 'card' }, h('strong', {}, 'Kitchen hours'), rows,
+        h('button', { class: 'ghost small', onclick: () => { s.hours.push({ days: '', open: '', close: '' }); drawRows(); } }, '+ Add row')),
+      h('div', { class: 'card' }, h('strong', {}, 'Happy hour'),
+        h('div', { class: 'row', style: 'margin-top:8px' }, dayBoxes),
+        h('div', { class: 'row' },
+          h('label', {}, 'Starts', h('input', { type: 'time', value: s.happyHour.start, oninput: (e) => (s.happyHour.start = e.target.value) })),
+          h('label', {}, 'Ends (6 PM Surprise unlocks)', h('input', { type: 'time', value: s.happyHour.end, oninput: (e) => (s.happyHour.end = e.target.value) })),
+          num(s, 'surpriseMinutes', 'Surprise lasts (minutes)', { min: 0, max: 240 }))),
+      saveBar('settings', () => s),
+    ];
+  }
+
+  function dealsSection() {
+    const deals = structuredClone(content.flashDeals);
+    const hhDays = content.settings.happyHour.days;
+    return [
+      h('h2', {}, '6 PM Surprise'),
+      h('p', { class: 'hint' }, 'One deal per happy-hour day. Guests can’t see it until it unlocks. Leave a day blank for “Ask your bartender”.'),
+      ...hhDays.map((d) => {
+        const deal = (deals[d] ??= { title: '', description: '', finePrint: '' });
+        return h('div', { class: 'card' }, h('strong', {}, DAYS[d]),
+          h('div', { class: 'row', style: 'margin-top:8px' }, text(deal, 'title', 'Deal (short)', { placeholder: '$3 Drafts', maxlength: 60 })),
+          h('div', { class: 'row' }, text(deal, 'description', 'Details', { maxlength: 200 })),
+          h('div', { class: 'row' }, text(deal, 'finePrint', 'Fine print', { placeholder: 'Dine-in only.', maxlength: 200 })));
+      }),
+      saveBar('flashDeals', () => deals),
+    ];
+  }
+
+  function pollsSection() {
+    const polls = structuredClone(content.polls);
+    const list = h('div');
+    const draw = () => list.replaceChildren(...polls.map((p, i) => {
+      const total = p.options.reduce((n, o) => n + (o.votes || 0), 0);
+      const closed = p.closesAt && Date.parse(p.closesAt) <= Date.now();
+      const opts = h('div');
+      const drawOpts = () => opts.replaceChildren(...p.options.map((o, j) => h('div', { class: 'opt' },
+        h('input', { value: o.emoji, placeholder: '🍔', maxlength: 8, oninput: (e) => (o.emoji = e.target.value) }),
+        h('input', { value: o.label, placeholder: 'Option', maxlength: 60, oninput: (e) => (o.label = e.target.value) }),
+        h('span', { class: 'votes' }, `${o.votes || 0} vote${o.votes === 1 ? '' : 's'}`),
+        h('button', { class: 'danger small', onclick: () => { p.options.splice(j, 1); drawOpts(); } }, '✕'))));
+      drawOpts();
+      return h('div', { class: 'card' },
+        h('div', { class: 'row' }, text(p, 'question', `Question ${closed ? '(closed)' : ''}`, { maxlength: 140 })),
+        h('div', { class: 'row' }, select(p, 'category', 'Category', CATEGORIES), when(p, 'closesAt', 'Voting closes'),
+          check(p, 'featured', 'Featured on Home'), check(p, 'hidden', 'Hide')),
+        h('label', {}, `Options · ${total} total vote${total === 1 ? '' : 's'}`), opts,
+        h('div', { class: 'row', style: 'margin-top:8px' },
+          h('button', { class: 'ghost small', onclick: () => { if (p.options.length < 6) { p.options.push({ emoji: '', label: '', votes: 0 }); drawOpts(); } } }, '+ Option'),
+          h('span', { style: 'flex:1' }),
+          h('button', { class: 'danger small', onclick: () => { if (confirm('Delete this poll and its votes?')) { polls.splice(i, 1); draw(); } } }, 'Delete poll')));
+    }));
+    draw();
+    return [
+      h('h2', {}, 'Polls'),
+      h('p', { class: 'hint' }, 'One vote per phone. Removing an option removes its votes. Polls disappear from the app after they close.'),
+      h('button', { class: 'ghost', onclick: () => {
+        polls.unshift({ category: 'food', question: '', featured: false, hidden: false, closesAt: new Date(Date.now() + 7 * 864e5).toISOString(), options: [{ emoji: '', label: '', votes: 0 }, { emoji: '', label: '', votes: 0 }] });
+        draw();
+      } }, '+ New poll'),
+      list,
+      saveBar('polls', () => polls.map(({ options, ...p }) => ({ ...p, options: options.map(({ votes, ...o }) => o) }))),
+    ];
+  }
+
+  function listSection({ title, hint, section, blank, fields }) {
+    const items = structuredClone(content[section]);
+    const list = h('div');
+    const draw = () => list.replaceChildren(...items.map((it, i) => h('div', { class: 'card' },
+      ...fields(it).map((row) => h('div', { class: 'row' }, row)),
+      h('div', { class: 'row' }, h('span', { style: 'flex:1' }),
+        h('button', { class: 'danger small', onclick: () => { items.splice(i, 1); draw(); } }, 'Delete')))));
+    draw();
+    return [
+      h('h2', {}, title), h('p', { class: 'hint' }, hint),
+      h('button', { class: 'ghost', onclick: () => { items.unshift(blank()); draw(); } }, '+ Add'),
+      list, saveBar(section, () => items),
+    ];
+  }
+
+  const gamedaySection = () => listSection({
+    title: 'Gameday', section: 'gameday',
+    hint: 'Upcoming games show in the Home banner with a countdown. Past games drop off automatically.',
+    blank: () => ({ team: 'bengals', opponent: '', homeAway: 'home', startsAt: '', broadcast: '', specials: [] }),
+    fields: (g) => {
+      const specials = { value: (g.specials || []).join('\n') };
+      return [
+        [select(g, 'team', 'Team', TEAMS), text(g, 'opponent', 'Opponent', { maxlength: 40 }), select(g, 'homeAway', 'Home / Away', { home: 'Home (vs)', away: 'Away (@)' })],
+        [when(g, 'startsAt', 'Kickoff'), text(g, 'broadcast', 'TV channel', { maxlength: 40 })],
+        [h('label', {}, 'Specials (one per line)', h('textarea', { value: specials.value, oninput: (e) => (g.specials = e.target.value.split('\n').map((s) => s.trim()).filter(Boolean)) }))],
+      ];
+    },
+  });
+
+  const comingSoonSection = () => listSection({
+    title: 'Coming Soon', section: 'comingSoon', hint: 'Shown on the Menu → Coming Soon tab.',
+    blank: () => ({ kind: 'food', title: '', description: '', eta: '', fromPoll: false }),
+    fields: (c) => [
+      [select(c, 'kind', 'Type', { food: 'Food', drink: 'Drink' }), text(c, 'title', 'Name', { maxlength: 60 }), text(c, 'eta', 'When', { placeholder: 'Mid-October', maxlength: 40 })],
+      [area(c, 'description', 'Description')],
+      [check(c, 'fromPoll', 'Fan Pick (won a poll)')],
+    ],
+  });
+
+  const showcaseSection = () => listSection({
+    title: 'We Made It Happen', section: 'showcase', hint: 'Poll winners that became real - shown on the Polls tab.',
+    blank: () => ({ title: '', description: '', pollQuestion: '', winningShare: 50, launchedOn: new Date().toISOString().slice(0, 10), status: 'on-menu' }),
+    fields: (s) => [
+      [text(s, 'title', 'What we made', { maxlength: 60 }), select(s, 'status', 'Status', STATUS)],
+      [text(s, 'pollQuestion', 'The poll question', { maxlength: 140 }), num(s, 'winningShare', 'Won with (%)', { min: 0, max: 100 }),
+        h('label', {}, 'Date', h('input', { type: 'date', value: s.launchedOn, oninput: (e) => (s.launchedOn = e.target.value) }))],
+      [area(s, 'description', 'Description')],
+    ],
+  });
+
+  const TABS = { status: ['App Status', statusSection], hours: ['Hours & Happy Hour', hoursSection], deals: ['6 PM Surprise', dealsSection], polls: ['Polls', pollsSection], gameday: ['Gameday', gamedaySection], soon: ['Coming Soon', comingSoonSection], showcase: ['We Made It', showcaseSection] };
+
+  function render() {
+    headerRight.replaceChildren(h('button', { class: 'small', onclick: logout }, 'Sign out'));
+    app.replaceChildren(
+      content.maintenance?.enabled ? h('div', { class: 'banner closed' }, '🔴 The app is CLOSED to guests. Switch it back on in App Status.') : '',
+      content.storageIsPersistent ? '' : h('div', { class: 'banner' }, '⚠️ No storage disk attached in Railway - changes will be lost on the next deploy. Add a Volume to this service (see README).'),
+      h('nav', {}, Object.entries(TABS).map(([k, [label]]) => h('button', { class: k === tab ? 'active' : '', onclick: () => { tab = k; render(); } }, label))),
+      ...TABS[tab][1](),
+    );
+  }
+
+  async function loadAndRender() {
+    app.replaceChildren(h('p', { class: 'muted' }, 'Loading…'));
+    try { content = await api('/api/admin/content'); render(); }
+    catch (e) { if (token) app.replaceChildren(h('p', { class: 'msg err' }, e.message)); }
+  }
+
+  function renderLogin() {
+    headerRight.replaceChildren();
+    const msg = h('p', { class: 'msg err' });
+    const pw = h('input', { type: 'password', autocomplete: 'current-password', placeholder: 'Admin password' });
+    const form = h('form', { class: 'card login', onsubmit: async (e) => {
+      e.preventDefault(); msg.textContent = '';
+      try {
+        const res = await api('/api/admin/login', { method: 'POST', body: JSON.stringify({ password: pw.value }) });
+        token = res.token;
+        try { sessionStorage.setItem('gameon-admin', token); } catch {}
+        loadAndRender();
+      } catch (err) { msg.textContent = err.message; }
+    } }, h('h2', {}, 'Sign in'), h('p', { class: 'hint' }, 'Staff only.'), pw, h('div', { style: 'height:10px' }), h('button', { class: 'primary', type: 'submit' }, 'Sign in'), msg);
+    app.replaceChildren(form);
+    pw.focus();
+  }
+
+  token ? loadAndRender() : renderLogin();
+})();
+</script>
+</body>
+</html>
