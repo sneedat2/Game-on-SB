@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 import { Text, View } from 'react-native';
 import { CheckinCard } from '@/components/CheckinCard';
 import { CouponCard } from '@/components/CouponCard';
+import { RewardsLookupCard } from '@/components/RewardsLookupCard';
 import { ErrorState, LoadingState, Screen, SectionHeader } from '@/components/ui';
 import { useAsync } from '@/hooks/useAsync';
 import { rewardsService } from '@/services/rewards';
@@ -20,7 +21,9 @@ export default function RewardsScreen() {
   );
 
   return (
-    <Screen title="Rewards" subtitle="Check in, perks & your digital coupon stash">
+    <Screen title="Rewards" subtitle="Your points, check-ins & coupon stash">
+      <RewardsLookupCard />
+
       <CheckinCard />
 
       <View>

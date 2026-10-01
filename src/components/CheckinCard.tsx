@@ -49,7 +49,7 @@ export function CheckinCard() {
               ? `${visitsLabel(visits)} so far - see you next time.`
               : visits > 0
                 ? `Once a day when you’re here · ${visitsLabel(visits)} so far`
-                : 'Once a day when you’re at the bar. Rewards for regulars are coming soon!'}
+                : 'Once a day when you’re at the bar. Check-in perks are coming soon!'}
           </Text>
         </View>
       </View>

@@ -11,6 +11,13 @@ export const BAR = {
   phoneE164: '+15133859999',
   timeZone: 'America/New_York',
   orderingUrl: 'https://order.toasttab.com/online/game-on-bar-and-grill',
+  // Toast Rewards pages for Game On. Toast doesn't let apps read balances, so guests check their
+  // real points (by email or phone) on Toast's own page, opened inside the app.
+  rewards: {
+    lookupUrl: 'https://www.toasttab.com/game-on-bar-and-grill/rewardsLookup',
+    signupUrl: 'https://www.toasttab.com/game-on-bar-and-grill/rewardsSignup',
+    program: 'Earn 1 point for every $1 spent and unlock $4 off every 100 points.', // as shown on Toast's signup page
+  },
   social: {
     facebook: 'https://www.facebook.com/gameonwestside',
     // TODO: replace with the bar's real Instagram profile; falls back to a search until confirmed.

@@ -8,8 +8,15 @@ import { colors } from '@/constants/theme';
  * so guests stay "in" the app and cookies/saved cards on Toast's side keep working.
  * `path` can deep-link to a Toast sub-page if Toast provides one (e.g. an item or pickup page).
  */
-export async function openOnlineOrdering(path = ''): Promise<void> {
-  const url = `${BAR.orderingUrl}${path}`;
+export function openOnlineOrdering(path = ''): Promise<void> {
+  return openInApp(`${BAR.orderingUrl}${path}`);
+}
+
+/** Toast's own Game On Rewards pages: check points by email/phone, or join. */
+export const openRewardsLookup = () => openInApp(BAR.rewards.lookupUrl);
+export const openRewardsSignup = () => openInApp(BAR.rewards.signupUrl);
+
+async function openInApp(url: string): Promise<void> {
   try {
     await WebBrowser.openBrowserAsync(url, {
       toolbarColor: colors.ink900,
