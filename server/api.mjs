@@ -5,6 +5,8 @@
 //   GET  /api/flash-deal               today's 6 PM Surprise - only once it has unlocked
 //   GET  /api/polls?device=<id>        open polls with vote counts + this device's votes
 //   POST /api/polls/<id>/vote          { deviceId, optionId }
+//   GET  /api/checkin?device=<id>      checked in today? + visit count
+//   POST /api/checkin                  { deviceId, lat, lng, accuracy } - once per day, at the bar
 // Admin (X-Admin-Token: <token from /api/admin/login>):
 //   POST /api/admin/login              { password } -> { token }
 //   GET  /api/admin/content            everything, including all polls and vote totals
@@ -13,6 +15,8 @@
 import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import { adminEnabled, checkPassword, issueToken, loginAllowed, recordFailure, verifyToken } from './auth.mjs';
+import { checkinStats, evaluateCheckin, recordCheckin } from './checkins.mjs';
+import { validateHome } from './home.mjs';
 import { MENU_SECTION_IDS, MENU_SECTIONS, withBase } from './menuOverrides.mjs';
 import { upcomingAutoGames } from './schedule.mjs';
 import { getCachedMenu, ToastConfigError } from './toastMenu.mjs';
@@ -90,6 +94,8 @@ const TEAMS = ['bengals', 'bearcats', 'reds', 'fcc'];
 const POLL_CATEGORIES = ['food', 'drinks', 'events', 'debates'];
 
 const validators = {
+  home: (v) => validateHome(v, fail),
+
   menuOverrides(v) {
     const entries = Object.entries(v?.items ?? {});
     if (entries.length > 1000) fail('Too many menu edits');
@@ -267,6 +273,7 @@ async function gamedayGames(c) {
 async function publicContent(c) {
   return {
     settings: c.settings,
+    home: c.home,
     gameday: (await gamedayGames(c)).slice(0, 6),
     comingSoon: c.comingSoon,
     showcase: c.showcase,
@@ -277,10 +284,31 @@ async function publicContent(c) {
 
 const deviceIdOk = (v) => typeof v === 'string' && /^[\w-]{8,64}$/.test(v);
 
+function validateCheckinSettings(v) {
+  const radius = Number(v?.radiusMeters);
+  if (!Number.isFinite(radius) || radius < 25 || radius > 2000) fail('Check-in distance must be between 25 and 2000 meters');
+  const lat = Number(v?.location?.lat);
+  const lng = Number(v?.location?.lng);
+  if (!Number.isFinite(lat) || Math.abs(lat) > 90 || !Number.isFinite(lng) || Math.abs(lng) > 180) fail('Bar location must be a valid latitude and longitude');
+  return { enabled: Boolean(v?.enabled), radiusMeters: Math.round(radius), location: { lat: Number(lat.toFixed(6)), lng: Number(lng.toFixed(6)) } };
+}
+
+// Light abuse protection: 20 check-in attempts per phone (and per network) per hour.
+const checkinAttempts = new Map();
+function checkinAllowed(deviceId, ip) {
+  const now = Date.now();
+  for (const key of [`d:${deviceId}`, `i:${ip}`]) {
+    const e = checkinAttempts.get(key);
+    if (!e || now - e.first > 3600_000) checkinAttempts.set(key, { first: now, count: 1 });
+    else if (++e.count > (key.startsWith('i:') ? 200 : 20)) return false;
+  }
+  return true;
+}
+
 /** Handles /api/content, /api/flash-deal, /api/polls*, /api/admin*. Returns false if not ours. */
 export async function handleContentApi(req, res, path) {
   try {
-    if (!path.startsWith('/api/content') && !path.startsWith('/api/flash-deal') && !path.startsWith('/api/polls') && !path.startsWith('/api/admin')) {
+    if (!['/api/content', '/api/flash-deal', '/api/polls', '/api/checkin', '/api/admin'].some((p) => path.startsWith(p))) {
       return false;
     }
     const c = getContent();
@@ -323,6 +351,32 @@ export async function handleContentApi(req, res, path) {
       return send(res, 200, pollView(poll, getContent()), { cors: true }), true;
     }
 
+    // ---------------- Check-ins ----------------
+
+    if (path === '/api/checkin' && req.method === 'GET') {
+      const device = new URL(req.url, 'http://x').searchParams.get('device') ?? '';
+      const { date } = barClock();
+      const visits = deviceIdOk(device) ? (c.checkins.visits[device]?.count ?? 0) : 0;
+      const checkedInToday = deviceIdOk(device) && Boolean(c.checkins.byDay[date]?.[device]);
+      return send(res, 200, { enabled: c.checkins.settings.enabled, checkedInToday, visits }, { cors: true }), true;
+    }
+
+    if (path === '/api/checkin' && req.method === 'POST') {
+      const { deviceId, lat, lng, accuracy } = await readJson(req, 1024);
+      if (!deviceIdOk(deviceId)) throw new HttpError(400, 'Missing device id');
+      if (!checkinAllowed(deviceId, clientIp(req))) throw new HttpError(429, 'Too many tries - give it a few minutes.');
+      const { date } = barClock();
+      if (c.checkins.byDay[date]?.[deviceId]) {
+        return send(res, 200, { ok: true, alreadyCheckedIn: true, visits: c.checkins.visits[deviceId]?.count ?? 1 }, { cors: true }), true;
+      }
+      const verdict = evaluateCheckin(c.checkins.settings, { lat, lng, accuracy });
+      if (!verdict.ok) throw new HttpError(verdict.status, verdict.error);
+      // Re-check inside the (synchronous) update so two quick taps can't both count.
+      const visits = await update((draft) => (draft.checkins.byDay[date]?.[deviceId] ? null : recordCheckin(draft.checkins, deviceId, date)));
+      const already = visits === null;
+      return send(res, 200, { ok: true, alreadyCheckedIn: already, visits: already ? c.checkins.visits[deviceId]?.count ?? 1 : visits }, { cors: true }), true;
+    }
+
     // ---------------- Admin ----------------
 
     if (path === '/api/admin/login' && req.method === 'POST') {
@@ -352,7 +406,20 @@ export async function handleContentApi(req, res, path) {
 
       if (path === '/api/admin/content' && req.method === 'GET') {
         const autoGames = await upcomingAutoGames();
-        return send(res, 200, { ...c, polls: c.polls.map((p) => pollView(p, c)), voters: undefined, storageIsPersistent, autoGames }), true;
+        // Check-in logs are served separately (/api/admin/checkins) to keep this small.
+        return send(res, 200, { ...c, polls: c.polls.map((p) => pollView(p, c)), voters: undefined, checkins: undefined, storageIsPersistent, autoGames }), true;
+      }
+
+      if (path === '/api/admin/checkins' && req.method === 'GET') {
+        return send(res, 200, { settings: c.checkins.settings, stats: checkinStats(c.checkins, barClock().date) }), true;
+      }
+
+      if (path === '/api/admin/checkinSettings' && req.method === 'PUT') {
+        const clean = validateCheckinSettings(await readJson(req, 2048));
+        await update((draft) => {
+          draft.checkins.settings = clean;
+        });
+        return send(res, 200, { ok: true, settings: clean }), true;
       }
 
       if (path === '/api/admin/menu' && req.method === 'GET') {
@@ -367,7 +434,7 @@ export async function handleContentApi(req, res, path) {
         }
       }
 
-      const section = /^\/api\/admin\/(menuOverrides|maintenance|settings|flashDeals|polls|gamedaySettings|gameday|comingSoon|showcase)$/.exec(path)?.[1];
+      const section = /^\/api\/admin\/(home|menuOverrides|maintenance|settings|flashDeals|polls|gamedaySettings|gameday|comingSoon|showcase)$/.exec(path)?.[1];
       if (section && req.method === 'PUT') {
         const clean = validators[section](await readJson(req));
         await update((draft) => {

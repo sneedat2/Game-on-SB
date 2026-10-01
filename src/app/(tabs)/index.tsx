@@ -31,6 +31,8 @@ export default function HomeScreen() {
     <Screen refreshing={games.loading && Boolean(games.data)} onRefresh={refresh}>
       <BrandHeader />
 
+      <FlashDealWidget />
+
       {games.error ? (
         <ErrorState error={games.error} onRetry={games.reload} />
       ) : games.data ? (
@@ -38,8 +40,6 @@ export default function HomeScreen() {
       ) : (
         <LoadingState label="Checking the schedule…" />
       )}
-
-      <FlashDealWidget />
 
       <QuickActions />
 

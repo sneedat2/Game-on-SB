@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Beer, ShoppingBag, Trophy, Vote, type LucideIcon } from 'lucide-react-native';
+import { Beer, MapPin, ShoppingBag, Vote, type LucideIcon } from 'lucide-react-native';
 import { Pressable, Text, View } from 'react-native';
 import { colors } from '@/constants/theme';
 import { openOnlineOrdering } from '@/services/ordering';
@@ -7,7 +7,7 @@ import { openOnlineOrdering } from '@/services/ordering';
 const actions: { label: string; icon: LucideIcon; onPress: () => void; primary?: boolean }[] = [
   { label: 'Order Online', icon: ShoppingBag, onPress: () => void openOnlineOrdering(), primary: true },
   { label: 'View Tap List', icon: Beer, onPress: () => router.push({ pathname: '/menu', params: { view: 'bar', section: 'draft', t: String(Date.now()) } }) },
-  { label: 'Check Rewards', icon: Trophy, onPress: () => router.push('/rewards') },
+  { label: 'Check In', icon: MapPin, onPress: () => router.push('/rewards') },
   { label: "Today's Poll", icon: Vote, onPress: () => router.push('/polls') },
 ];
 

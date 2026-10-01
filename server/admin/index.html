@@ -314,6 +314,61 @@
     ],
   });
 
+  // ---------- Check-ins ----------
+  function checkinsSection() {
+    const wrap = h('div', {}, h('p', { class: 'muted' }, 'Loading…'));
+    (async () => {
+      try {
+        const data = await api('/api/admin/checkins');
+        const s = structuredClone(data.settings);
+        const latIn = h('input', { type: 'number', step: 'any', value: s.location.lat, oninput: (e) => (s.location.lat = Number(e.target.value)) });
+        const lngIn = h('input', { type: 'number', step: 'any', value: s.location.lng, oninput: (e) => (s.location.lng = Number(e.target.value)) });
+        const locMsg = h('span', { class: 'msg' });
+        const useHere = h('button', { class: 'ghost small', onclick: () => {
+          if (!navigator.geolocation) { locMsg.className = 'msg err'; locMsg.textContent = 'This browser can’t share location.'; return; }
+          locMsg.className = 'msg'; locMsg.textContent = 'Finding you…';
+          navigator.geolocation.getCurrentPosition((p) => {
+            s.location.lat = Number(p.coords.latitude.toFixed(6));
+            s.location.lng = Number(p.coords.longitude.toFixed(6));
+            latIn.value = s.location.lat; lngIn.value = s.location.lng;
+            locMsg.className = 'msg ok'; locMsg.textContent = `Got it (±${Math.round(p.coords.accuracy)} m). Tap Save changes.`;
+          }, (err) => { locMsg.className = 'msg err'; locMsg.textContent = err.code === 1 ? 'Location is blocked for this site in your browser settings.' : 'Couldn’t get your location - try again.'; },
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+        } }, '📍 Use my current location');
+        const feet = (m) => Math.round(m * 3.281);
+        const radiusHint = h('span', { class: 'muted' }, `≈ ${feet(s.radiusMeters)} ft`);
+        const mapLink = () => `https://www.google.com/maps?q=${s.location.lat},${s.location.lng}`;
+
+        wrap.replaceChildren(
+          h('div', { class: 'card' },
+            h('strong', {}, `Today: ${data.stats.today} check-in${data.stats.today === 1 ? '' : 's'}`),
+            h('div', { class: 'muted', style: 'margin-top:4px' }, `${data.stats.uniqueGuests} different phones have checked in so far.`),
+            data.stats.days.length
+              ? h('div', { style: 'margin-top:10px' }, data.stats.days.map((d) => h('div', { class: 'row', style: 'margin-bottom:2px' },
+                h('span', { style: 'flex:1' }, new Date(`${d.date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })),
+                h('strong', {}, String(d.count)))))
+              : h('div', { class: 'muted', style: 'margin-top:8px' }, 'No check-ins yet.')),
+          h('div', { class: 'card' },
+            check(s, 'enabled', 'Check-ins turned on'),
+            h('div', { class: 'row', style: 'margin-top:10px' },
+              h('label', {}, 'How close guests must be (meters)', h('input', { type: 'number', min: 25, max: 2000, value: s.radiusMeters, oninput: (e) => { s.radiusMeters = Number(e.target.value); radiusHint.textContent = `≈ ${feet(s.radiusMeters)} ft`; } })),
+              radiusHint),
+            h('strong', { style: 'display:block;margin-top:8px' }, 'Bar location'),
+            h('p', { class: 'hint' }, 'Stand inside the bar and tap “Use my current location” for the most accurate check-ins.'),
+            h('div', { class: 'row' }, h('label', {}, 'Latitude', latIn), h('label', {}, 'Longitude', lngIn)),
+            h('div', { class: 'row' }, useHere, locMsg),
+            h('a', { href: '#', style: 'color:var(--brand);font-size:13px', onclick: (e) => { e.preventDefault(); window.open(mapLink(), '_blank', 'noopener'); } }, 'Check this spot on a map ↗')),
+          saveBar('checkinSettings', () => s),
+        );
+      } catch (e) { wrap.replaceChildren(h('p', { class: 'msg err' }, e.message)); }
+    })();
+    return [
+      h('h2', {}, 'Check-ins'),
+      h('p', { class: 'hint' }, 'Guests tap “Check in” on the Rewards tab when they’re at the bar - once per day, per phone. Points come later; for now it counts visits.'),
+      wrap,
+    ];
+  }
+
   // ---------- Menu (edits on top of the live Toast menu) ----------
   let menuData = null; // { sections, items, overrides } from /api/admin/menu
 
@@ -400,7 +455,7 @@
     );
   }
 
-  const TABS = { status: ['App Status', statusSection], menu: ['Menu', menuSection], hours: ['Hours & Happy Hour', hoursSection], deals: ['6 PM Surprise', dealsSection], polls: ['Polls', pollsSection], gameday: ['Gameday', gamedaySection], soon: ['Coming Soon', comingSoonSection], showcase: ['We Made It', showcaseSection] };
+  const TABS = { status: ['App Status', statusSection], menu: ['Menu', menuSection], checkins: ['Check-ins', checkinsSection], hours: ['Hours & Happy Hour', hoursSection], deals: ['6 PM Surprise', dealsSection], polls: ['Polls', pollsSection], gameday: ['Gameday', gamedaySection], soon: ['Coming Soon', comingSoonSection], showcase: ['We Made It', showcaseSection] };
 
   function render() {
     headerRight.replaceChildren(h('button', { class: 'small', onclick: logout }, 'Sign out'));

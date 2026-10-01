@@ -1,6 +1,8 @@
 // Starting content for a brand-new admin store (first boot). Everything here is editable at /admin.
 // Sample polls, deals, Coming Soon and showcase entries are placeholders - replace them in the admin.
 import { randomUUID } from 'node:crypto';
+import { defaultCheckins } from './checkins.mjs';
+import { defaultHome } from './home.mjs';
 
 const DAY_MS = 86_400_000;
 const id = () => randomUUID().slice(0, 8);
@@ -49,6 +51,14 @@ export function migrateContent(c) {
     c.maintenance = defaultMaintenance();
     changed = true;
   }
+  if (!c.home) {
+    c.home = defaultHome();
+    changed = true;
+  }
+  if (!c.checkins) {
+    c.checkins = defaultCheckins();
+    changed = true;
+  }
   if (!c.menuOverrides) {
     c.menuOverrides = defaultMenuOverrides();
     changed = true;
@@ -76,6 +86,8 @@ export function defaultContent() {
     version: 1,
     maintenance: defaultMaintenance(),
     menuOverrides: defaultMenuOverrides(),
+    checkins: defaultCheckins(),
+    home: defaultHome(),
     settings: {
       hours: [
         { days: 'Mon–Sat', open: '11 AM', close: '9:30 PM' },
