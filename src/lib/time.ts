@@ -44,60 +44,116 @@ export function barDateKey(now: Date = new Date()): string {
   return `${c.year}-${String(c.month).padStart(2, '0')}-${String(c.day).padStart(2, '0')}`;
 }
 
-/**
- * Happy-hour-day flow (default Mon–Fri): before happy hour → happy hour (3–6 PM) → surprise
- * (6–7 PM). After that, and on non-happy-hour days, it's 'off' until the next happy hour.
- */
-export type FlashDealPhase = 'before' | 'happy-hour' | 'live' | 'off';
-
-export interface FlashDealState {
-  phase: FlashDealPhase;
-  /** Milliseconds until the next phase change. */
-  msRemaining: number;
-  /** Absolute time of the next surprise unlock (a weekday 6 PM); used for local notifications. */
-  nextUnlockAt: Date;
-  /** Days until the next happy hour starts (0 = today); only meaningful when phase is 'off'. */
-  daysUntilNextHappyHour: number;
-}
-
 const DAY_S = 24 * 60 * 60;
 
 function barWeekday(c: WallClock): number {
   return new Date(Date.UTC(c.year, c.month - 1, c.day)).getUTCDay();
 }
 
-/** Days from today until the first happy-hour day whose `atSeconds` hasn't passed yet. */
+/** Bar-local weekday (0 = Sunday) for `now`. */
+export const barWeekdayNow = (now: Date = new Date()) => barWeekday(barWallClock(now));
+
+const secondsIntoBarDay = (now: Date) => {
+  const c = barWallClock(now);
+  return c.hour * 3600 + c.minute * 60 + c.second;
+};
+
+/** Days from today until the first listed weekday whose `atSeconds` hasn't passed yet (7 if none). */
 function daysUntilWeekdayAt(days: number[], weekday: number, secondsIntoDay: number, atSeconds: number): number {
   for (let d = 0; d <= 7; d++) {
     if (days.includes((weekday + d) % 7) && (d > 0 || secondsIntoDay < atSeconds)) return d;
   }
-  return 7; // only when no happy-hour days are set
+  return 7;
 }
 
-/** Happy hour days/times come from the admin-editable settings (services/settings.ts). */
-export function getFlashDealState(now: Date = new Date(), settings: BarSettings = getSettings()): FlashDealState {
-  const { days } = settings.happyHour;
-  const c = barWallClock(now);
-  const weekday = barWeekday(c);
-  const sid = c.hour * 3600 + c.minute * 60 + c.second;
-  const startS = toSeconds(settings.happyHour.start);
-  const unlockS = toSeconds(settings.happyHour.end);
-  const endS = unlockS + settings.surpriseMinutes * 60;
-  const isHappyHourDay = (d: number) => days.includes(d);
-  const daysUntilWeekdayAtFor = (at: number) => daysUntilWeekdayAt(days, weekday, sid, at);
+// ---------------- Happy hour (tiers) ----------------
+
+/**
+ * On a happy-hour day: 'before' → 'on' (one tier at a time, e.g. 3–4, 4–5, 5–6) → 'off'.
+ * Non-happy-hour days are 'off' until the next happy hour.
+ */
+export type HappyHourStage = 'before' | 'on' | 'off';
+
+export interface HappyHourState {
+  stage: HappyHourStage;
+  /** Current tier while 'on'. During a gap between tiers it's the next tier, with `waiting` set. */
+  phaseIndex: number;
+  waiting: boolean;
+  /** ms until happy hour starts (before/off), or until the current tier ends (or starts, if waiting). */
+  msRemaining: number;
+  /** Days until the next happy hour (0 = today). */
+  daysUntilNext: number;
+}
+
+export function getHappyHourState(now: Date = new Date(), settings: BarSettings = getSettings()): HappyHourState {
+  const { days, phases, start } = settings.happyHour;
+  const weekday = barWeekdayNow(now);
+  const sid = secondsIntoBarDay(now);
   const ms = (s: number) => s * 1000 - now.getMilliseconds();
+  const startS = toSeconds(start);
 
-  const unlockDays = daysUntilWeekdayAtFor(unlockS);
-  const nextUnlockAt = new Date(now.getTime() + ms(unlockDays * DAY_S - sid + unlockS));
-  const base = { nextUnlockAt, daysUntilNextHappyHour: 0 };
-
-  if (isHappyHourDay(weekday)) {
-    if (sid < startS) return { ...base, phase: 'before', msRemaining: ms(startS - sid) };
-    if (sid < unlockS) return { ...base, phase: 'happy-hour', msRemaining: ms(unlockS - sid) };
-    if (sid < endS) return { ...base, phase: 'live', msRemaining: ms(endS - sid) };
+  if (days.includes(weekday)) {
+    if (sid < startS) return { stage: 'before', phaseIndex: 0, waiting: false, msRemaining: ms(startS - sid), daysUntilNext: 0 };
+    for (let i = 0; i < phases.length; i++) {
+      const pStart = toSeconds(phases[i].start);
+      const pEnd = toSeconds(phases[i].end);
+      if (sid < pEnd) {
+        const waiting = sid < pStart;
+        return { stage: 'on', phaseIndex: i, waiting, msRemaining: ms((waiting ? pStart : pEnd) - sid), daysUntilNext: 0 };
+      }
+    }
   }
-  const waitDays = daysUntilWeekdayAtFor(startS);
-  return { ...base, phase: 'off', msRemaining: ms(waitDays * DAY_S - sid + startS), daysUntilNextHappyHour: waitDays };
+  const wait = daysUntilWeekdayAt(days, weekday, sid, startS);
+  return { stage: 'off', phaseIndex: 0, waiting: false, msRemaining: ms(wait * DAY_S - sid + startS), daysUntilNext: wait };
+}
+
+// ---------------- Promos (own days & times) ----------------
+
+export interface PromoWindow {
+  days: number[];
+  start: string;
+  end: string;
+}
+
+/** Where a promo stands today (only meaningful when today is one of its days). */
+export function promoTiming(p: PromoWindow, now: Date = new Date()): { state: 'upcoming' | 'live' | 'ended'; msRemaining: number } {
+  const sid = secondsIntoBarDay(now);
+  const ms = (s: number) => s * 1000 - now.getMilliseconds();
+  const s = toSeconds(p.start);
+  const e = toSeconds(p.end);
+  if (sid < s) return { state: 'upcoming', msRemaining: ms(s - sid) };
+  if (sid < e) return { state: 'live', msRemaining: ms(e - sid) };
+  return { state: 'ended', msRemaining: 0 };
+}
+
+/** The soonest promo that hasn't started yet (today later on, or in the next week). */
+export function nextPromoStart<T extends PromoWindow>(promos: T[], now: Date = new Date()): { promo: T; daysAhead: number; at: Date } | null {
+  const weekday = barWeekdayNow(now);
+  const sid = secondsIntoBarDay(now);
+  let best: { promo: T; daysAhead: number; at: Date } | null = null;
+  for (const promo of promos) {
+    const startS = toSeconds(promo.start);
+    const d = daysUntilWeekdayAt(promo.days, weekday, sid, startS);
+    if (d === 7 && !promo.days.includes(weekday)) continue;
+    const at = new Date(now.getTime() + (d * DAY_S - sid + startS) * 1000 - now.getMilliseconds());
+    if (!best || at < best.at) best = { promo, daysAhead: d, at };
+  }
+  return best;
+}
+
+/** Upcoming start times across all promos (for alerts), soonest first. */
+export function upcomingPromoStarts<T extends PromoWindow>(promos: T[], count: number, now: Date = new Date()): { promo: T; at: Date }[] {
+  const out: { promo: T; at: Date }[] = [];
+  const weekday = barWeekdayNow(now);
+  const sid = secondsIntoBarDay(now);
+  for (let d = 0; d < 14 && out.length < count * 4; d++) {
+    for (const promo of promos) {
+      const startS = toSeconds(promo.start);
+      if (!promo.days.includes((weekday + d) % 7) || (d === 0 && sid >= startS)) continue;
+      out.push({ promo, at: new Date(now.getTime() + (d * DAY_S - sid + startS) * 1000 - now.getMilliseconds()) });
+    }
+  }
+  return out.sort((a, b) => a.at.getTime() - b.at.getTime()).slice(0, count);
 }
 
 const weekdayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];

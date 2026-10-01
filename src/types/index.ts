@@ -9,7 +9,7 @@ export type QuickActionKey = 'order' | 'taps' | 'checkin' | 'poll';
 
 export type HomeBlock =
   | { id: string; type: 'header' | 'gameday'; visible: boolean }
-  | { id: string; type: 'happyHour' | 'poll'; visible: boolean; title: string }
+  | { id: string; type: 'happyHour' | 'promos' | 'poll'; visible: boolean; title: string }
   | { id: string; type: 'quickActions'; visible: boolean; buttons: { key: QuickActionKey; label: string; visible: boolean }[] }
   | { id: string; type: 'message'; visible: boolean; title: string; text: string; style: 'yellow' | 'dark' };
 
@@ -29,11 +29,15 @@ export interface GamedayEvent {
   specials: string[]; // e.g. "$20 domestic buckets"
 }
 
-export interface FlashDeal {
+/** A promo from /admin → Promos. Surprise promos arrive without title/details until they start. */
+export interface Promo {
   id: string;
-  date: string; // YYYY-MM-DD in the bar's time zone
-  title: string;
-  description: string;
+  days: number[]; // 0 = Sunday
+  start: string; // "HH:MM" bar-local
+  end: string;
+  surprise: boolean;
+  title?: string;
+  description?: string;
   finePrint?: string;
 }
 

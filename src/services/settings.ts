@@ -2,11 +2,16 @@ import { useSyncExternalStore } from 'react';
 
 // Bar settings editable in the admin (/admin → Hours & Happy Hour). These defaults are used until
 // the server responds, and whenever it can't be reached.
+export interface HappyHourPhase {
+  start: string; // "HH:MM" bar-local
+  end: string;
+  deals: string[]; // e.g. ["$1 bottles", "$2 drafts"]
+}
+
 export interface BarSettings {
   hours: { days: string; open: string; close: string }[];
-  /** Weekdays (0 = Sunday) and "HH:MM" bar-local times. The 6 PM Surprise unlocks at `end`. */
-  happyHour: { days: number[]; start: string; end: string };
-  surpriseMinutes: number;
+  /** Weekdays (0 = Sunday). start/end span all phases; each phase has its own prices. */
+  happyHour: { days: number[]; start: string; end: string; phases: HappyHourPhase[] };
 }
 
 export const DEFAULT_SETTINGS: BarSettings = {
@@ -14,8 +19,16 @@ export const DEFAULT_SETTINGS: BarSettings = {
     { days: 'Mon–Sat', open: '11 AM', close: '9:30 PM' },
     { days: 'Sun', open: '11 AM', close: '9 PM' },
   ],
-  happyHour: { days: [1, 2, 3, 4, 5], start: '15:00', end: '18:00' },
-  surpriseMinutes: 60,
+  happyHour: {
+    days: [1, 2, 3, 4, 5],
+    start: '15:00',
+    end: '18:00',
+    phases: [
+      { start: '15:00', end: '16:00', deals: ['$1 bottles', '$2 drafts'] },
+      { start: '16:00', end: '17:00', deals: ['$2 bottles', '$3 drafts'] },
+      { start: '17:00', end: '18:00', deals: ['$3 bottles', '$4 drafts'] },
+    ],
+  },
 };
 
 let current: BarSettings = DEFAULT_SETTINGS;
@@ -24,8 +37,18 @@ const listeners = new Set<() => void>();
 export const getSettings = () => current;
 
 export function setSettings(next: BarSettings) {
-  current = next;
+  // Older servers may not send phases yet - fall back to one phase spanning happy hour.
+  const hh = next.happyHour;
+  const phases = Array.isArray(hh?.phases) && hh.phases.length ? hh.phases : [{ start: hh.start, end: hh.end, deals: [] }];
+  current = { ...next, happyHour: { ...hh, phases } };
   listeners.forEach((l) => l());
+}
+
+/** "3–4 PM" */
+export function timeRange(start: string, end: string): string {
+  const a = formatTime(start);
+  const b = formatTime(end);
+  return a.slice(-2) === b.slice(-2) ? `${a.slice(0, -3)}–${b}` : `${a}–${b}`;
 }
 
 export function useSettings(): BarSettings {
@@ -63,10 +86,7 @@ export function daysLabel(days: number[]): string {
 
 /** "Mon–Fri 3–6 PM" */
 export function happyHourLabel(s: BarSettings = current): string {
-  const start = formatTime(s.happyHour.start);
-  const end = formatTime(s.happyHour.end);
-  const sameHalf = start.slice(-2) === end.slice(-2);
-  return `${daysLabel(s.happyHour.days)} ${sameHalf ? start.slice(0, -3) : start}–${end}`;
+  return `${daysLabel(s.happyHour.days)} ${timeRange(s.happyHour.start, s.happyHour.end)}`;
 }
 
 export const toSeconds = (hhmm: string) => {

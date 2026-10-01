@@ -2,23 +2,24 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { colors } from '@/constants/theme';
-import { barDateKey, getFlashDealState } from '@/lib/time';
+import { barDateKey, upcomingPromoStarts } from '@/lib/time';
 import { config, isLive } from './config';
-import { formatTime, getSettings } from './settings';
+import { promoSchedule } from './promos';
+import { formatTime } from './settings';
 import { readJSON, writeJSON } from './storage';
 import { ensureSession, supabase } from './supabase';
 
 // Two layers:
-//  1. Local notifications scheduled on-device for the next weekday 6 PM unlocks. Works offline,
-//     in Expo Go, and without any backend.
+//  1. Local notifications scheduled on-device for upcoming promo starts (/admin → Promos).
+//     Works in Expo Go and without push setup.
 //  2. Remote push via Expo push tokens stored in Supabase, so the bar can blast gameday specials
 //     (see supabase/functions/flash-deal-push). Requires a development build + EAS project id.
 
 const supported = Platform.OS !== 'web';
 const CHANNEL_ID = 'flash-deals';
-const PREF_KEY = 'flash-alerts-enabled';
-const ID_PREFIX = 'flash-deal-';
-const UNLOCKS_AHEAD = 5; // a work-week of weekday 6 PM alerts, refreshed on every launch
+const PREF_KEY = 'flash-alerts-enabled'; // same key as before, so existing opt-ins carry over
+const ID_PREFIX = 'promo-';
+const ALERTS_AHEAD = 6; // next few promo starts, refreshed on every launch
 
 export function initNotifications() {
   if (!supported) return;
@@ -32,7 +33,7 @@ export function initNotifications() {
   });
   if (Platform.OS === 'android') {
     void Notifications.setNotificationChannelAsync(CHANNEL_ID, {
-      name: '6 PM Surprise & gameday deals',
+      name: 'Promos & gameday deals',
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: colors.brand,
@@ -50,10 +51,10 @@ async function ensurePermission(): Promise<boolean> {
   return next.granted;
 }
 
-export const flashAlertsEnabled = () => readJSON<boolean>(PREF_KEY, false);
+export const promoAlertsEnabled = () => readJSON<boolean>(PREF_KEY, false);
 
-/** Schedules (or refreshes) the next weekday 6 PM unlock alerts. Safe to call on every launch. */
-export async function scheduleFlashDealAlerts(): Promise<void> {
+/** Schedules (or refreshes) alerts for the next promo starts. Safe to call on every launch. */
+export async function schedulePromoAlerts(): Promise<void> {
   if (!supported) return;
   const scheduled = await Notifications.getAllScheduledNotificationsAsync();
   await Promise.all(
@@ -62,31 +63,23 @@ export async function scheduleFlashDealAlerts(): Promise<void> {
       .map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier)),
   );
 
-  // Uses the admin-edited happy hour (days + end time); nothing to schedule if it's turned off.
-  const settings = getSettings();
-  if (settings.happyHour.days.length === 0) return;
-  const unlockLabel = formatTime(settings.happyHour.end);
-
-  let unlockAt = getFlashDealState(new Date(), settings).nextUnlockAt;
-  for (let i = 0; i < UNLOCKS_AHEAD; i++) {
+  // Promos and their times come from /admin → Promos; surprises have no details in the schedule.
+  for (const { promo, at } of upcomingPromoStarts(await promoSchedule(), ALERTS_AHEAD)) {
     await Notifications.scheduleNotificationAsync({
-      identifier: `${ID_PREFIX}${barDateKey(unlockAt)}`,
-      content: {
-        title: `🔓 The ${unlockLabel} Surprise is live!`,
-        body: 'Happy hour just ended - tap to see tonight\'s flash deal at Game On.',
-        data: { url: '/' },
-      },
+      identifier: `${ID_PREFIX}${promo.id}-${barDateKey(at)}`,
+      content: promo.surprise
+        ? { title: '🔓 Surprise promo is live!', body: 'Tap to see today’s surprise deal at Game On.', data: { url: '/' } }
+        : { title: `🍻 ${promo.title ?? 'Promo'} is on now!`, body: promo.description || `Until ${formatTime(promo.end)} at Game On.`, data: { url: '/' } },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
-        date: unlockAt,
+        date: at,
         channelId: CHANNEL_ID,
       },
     });
-    unlockAt = getFlashDealState(new Date(unlockAt.getTime() + 60_000), settings).nextUnlockAt;
   }
 }
 
-export async function setFlashDealAlerts(enabled: boolean): Promise<{ ok: boolean; reason?: string }> {
+export async function setPromoAlerts(enabled: boolean): Promise<{ ok: boolean; reason?: string }> {
   if (!supported) return { ok: false, reason: 'Notifications are available in the iOS and Android app.' };
   if (!enabled) {
     await writeJSON(PREF_KEY, false);
@@ -102,7 +95,7 @@ export async function setFlashDealAlerts(enabled: boolean): Promise<{ ok: boolea
     return { ok: false, reason: 'Notifications are turned off for Game On in your phone settings.' };
   }
   await writeJSON(PREF_KEY, true);
-  await scheduleFlashDealAlerts();
+  await schedulePromoAlerts();
   void registerPushToken();
   return { ok: true };
 }

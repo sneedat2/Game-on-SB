@@ -1,7 +1,7 @@
 // Production web server (Railway): serves the exported web app from dist/, the admin editor, and a small API.
 //   GET /api/menu         live Toast menu (cached 5 min; keeps serving the last good copy if Toast is down)
 //   GET /api/menu/groups  setup helper: Toast group names and where each lands in the app
-//   /api/content, /api/polls, /api/flash-deal, /api/admin/*  admin-editable content (see api.mjs)
+//   /api/content, /api/polls, /api/promos, /api/checkin, /api/admin/*  admin-editable content (see api.mjs)
 //   GET /admin            the admin editor (ADMIN_PASSWORD)
 //   GET /api/health       health check for Railway
 // While SITE_USERS is set, everything except /api/health requires a tester login (see auth.mjs).

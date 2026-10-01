@@ -6,7 +6,7 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
 import { BAR } from '@/constants/bar';
 import { loadContent } from '@/services/content';
-import { formatTime, happyHourLabel, useSettings } from '@/services/settings';
+import { happyHourLabel, timeRange, useSettings } from '@/services/settings';
 import { colors } from '@/constants/theme';
 import { callBar, openDirections, openExternal, openOnlineOrdering } from '@/services/ordering';
 
@@ -76,9 +76,12 @@ export default function InfoScreen() {
               <Text className="font-black text-ink">Happy Hour</Text>
               <Text className="font-bold text-ink">{happyHourLabel(settings)}</Text>
             </View>
-            <Text className="mt-2 text-xs text-muted">
-              When happy hour ends at {formatTime(settings.happyHour.end)}, a surprise deal drops in the app.
-            </Text>
+            {settings.happyHour.phases.map((p, i) => (
+              <View key={`${p.start}-${i}`} className="flex-row justify-between py-1.5">
+                <Text className="text-chalk">{timeRange(p.start, p.end)}</Text>
+                <Text className="ml-3 flex-1 text-right text-muted">{p.deals.join(' · ')}</Text>
+              </View>
+            ))}
           </>
         ) : null}
       </Card>

@@ -158,38 +158,68 @@
       text(r, 'days', 'Days', { placeholder: 'Mon–Sat' }), text(r, 'open', 'Opens', { placeholder: '11 AM' }), text(r, 'close', 'Closes', { placeholder: '9:30 PM' }),
       h('button', { class: 'danger small', onclick: () => { s.hours.splice(i, 1); drawRows(); } }, 'Remove'))));
     drawRows();
-    const dayBoxes = DAYS.map((d, i) => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: s.happyHour.days.includes(i), onchange: (e) => {
-      s.happyHour.days = e.target.checked ? [...s.happyHour.days, i] : s.happyHour.days.filter((x) => x !== i);
+    s.happyHour.phases ??= [];
+    const dayBoxes = (obj) => DAYS.map((d, i) => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: obj.days.includes(i), onchange: (e) => {
+      obj.days = e.target.checked ? [...obj.days, i] : obj.days.filter((x) => x !== i);
     } }), d));
+    const timeInput = (obj, key, label) => h('label', {}, label, h('input', { type: 'time', value: obj[key], oninput: (e) => (obj[key] = e.target.value) }));
+
+    // Happy hour tiers, e.g. 3–4 PM: $1 bottles / $2 drafts. Happy hour runs from the first to the last.
+    const phases = h('div');
+    const drawPhases = () => phases.replaceChildren(...s.happyHour.phases.map((p, i) => h('div', { class: 'menu-item' },
+      h('div', { class: 'row' }, h('strong', { style: 'flex:1' }, `Hour ${i + 1}`),
+        h('button', { class: 'danger small', onclick: () => { s.happyHour.phases.splice(i, 1); drawPhases(); } }, 'Remove')),
+      h('div', { class: 'row' }, timeInput(p, 'start', 'From'), timeInput(p, 'end', 'To')),
+      h('div', { class: 'row' }, h('label', {}, 'Deals (one per line)', h('textarea', {
+        value: (p.deals || []).join('\n'), placeholder: '$1 bottles\n$2 drafts',
+        oninput: (e) => (p.deals = e.target.value.split('\n').map((x) => x.trim()).filter(Boolean)),
+      }))))));
+    drawPhases();
+    const addPhase = () => {
+      const last = s.happyHour.phases.at(-1);
+      const start = last?.end ?? '15:00';
+      const [hh, mm] = start.split(':').map(Number);
+      const end = `${String(Math.min(hh + 1, 23)).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+      s.happyHour.phases.push({ start, end, deals: [] });
+      drawPhases();
+    };
+
     return [
       h('h2', {}, 'Hours & Happy Hour'),
-      h('p', { class: 'hint' }, 'Shown on the Info tab. Happy hour also drives the countdown card on Home.'),
+      h('p', { class: 'hint' }, 'Shown on the Info tab and the Happy Hour card on Home.'),
       h('div', { class: 'card' }, h('strong', {}, 'Kitchen hours'), rows,
         h('button', { class: 'ghost small', onclick: () => { s.hours.push({ days: '', open: '', close: '' }); drawRows(); } }, '+ Add row')),
-      h('div', { class: 'card' }, h('strong', {}, 'Happy hour'),
-        h('div', { class: 'row', style: 'margin-top:8px' }, dayBoxes),
-        h('div', { class: 'row' },
-          h('label', {}, 'Starts', h('input', { type: 'time', value: s.happyHour.start, oninput: (e) => (s.happyHour.start = e.target.value) })),
-          h('label', {}, 'Ends (6 PM Surprise unlocks)', h('input', { type: 'time', value: s.happyHour.end, oninput: (e) => (s.happyHour.end = e.target.value) })),
-          num(s, 'surpriseMinutes', 'Surprise lasts (minutes)', { min: 0, max: 240 }))),
+      h('div', { class: 'card' }, h('strong', {}, 'Happy hour days'),
+        h('div', { class: 'row', style: 'margin-top:8px' }, dayBoxes(s.happyHour))),
+      h('div', { class: 'card' }, h('strong', {}, 'Happy hour prices by the hour'),
+        h('p', { class: 'hint' }, 'Each hour can have its own deals. The Home card shows the current hour and counts down to the next price change.'),
+        phases,
+        h('button', { class: 'ghost small', onclick: addPhase }, '+ Add hour')),
       saveBar('settings', () => s),
     ];
   }
 
-  function dealsSection() {
-    const deals = structuredClone(content.flashDeals);
-    const hhDays = content.settings.happyHour.days;
+  function promosSection() {
+    const promos = structuredClone(content.promos ?? []);
+    const list = h('div');
+    const timeInput = (obj, key, label) => h('label', {}, label, h('input', { type: 'time', value: obj[key], oninput: (e) => (obj[key] = e.target.value) }));
+    const draw = () => list.replaceChildren(...promos.map((p, i) => h('div', { class: 'card' },
+      h('div', { class: 'row' }, text(p, 'title', 'Promo', { placeholder: '$7 Burgers', maxlength: 60 })),
+      h('div', { class: 'row' }, h('span', { class: 'muted', style: 'flex:0 0 auto' }, 'Days:'), DAYS.map((d, di) => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: p.days.includes(di), onchange: (e) => {
+        p.days = e.target.checked ? [...p.days, di] : p.days.filter((x) => x !== di);
+      } }), d))),
+      h('div', { class: 'row' }, timeInput(p, 'start', 'Starts'), timeInput(p, 'end', 'Ends')),
+      h('div', { class: 'row' }, text(p, 'description', 'Details', { maxlength: 200, placeholder: 'Any burger, all day' })),
+      h('div', { class: 'row' }, text(p, 'finePrint', 'Fine print', { maxlength: 200, placeholder: 'Dine-in only.' })),
+      h('div', { class: 'row' }, check(p, 'surprise', 'Keep it a surprise until it starts'), h('span', { style: 'flex:1' }),
+        h('button', { class: 'danger small', onclick: () => { if (confirm('Delete this promo?')) { promos.splice(i, 1); draw(); } } }, 'Delete promo')))));
+    draw();
     return [
-      h('h2', {}, '6 PM Surprise'),
-      h('p', { class: 'hint' }, 'One deal per happy-hour day. Guests can’t see it until it unlocks. Leave a day blank for “Ask your bartender”.'),
-      ...hhDays.map((d) => {
-        const deal = (deals[d] ??= { title: '', description: '', finePrint: '' });
-        return h('div', { class: 'card' }, h('strong', {}, DAYS[d]),
-          h('div', { class: 'row', style: 'margin-top:8px' }, text(deal, 'title', 'Deal (short)', { placeholder: '$3 Drafts', maxlength: 60 })),
-          h('div', { class: 'row' }, text(deal, 'description', 'Details', { maxlength: 200 })),
-          h('div', { class: 'row' }, text(deal, 'finePrint', 'Fine print', { placeholder: 'Dine-in only.', maxlength: 200 })));
-      }),
-      saveBar('flashDeals', () => deals),
+      h('h2', {}, 'Promos'),
+      h('p', { class: 'hint' }, 'Deals with their own days and times, shown in the Promos card on Home. A surprise promo stays hidden (“Surprise promo - unlocks at 6 PM”) until it starts. Guests who turn on alerts get a notification when a promo starts.'),
+      h('button', { class: 'ghost', onclick: () => { promos.unshift({ title: '', days: [1], start: '18:00', end: '19:00', description: '', finePrint: '', surprise: false }); draw(); } }, '+ Add promo'),
+      list,
+      saveBar('promos', () => promos),
     ];
   }
 
@@ -329,7 +359,7 @@
     if (e.origin === location.origin && e.data?.type === 'gameon:preview-ready' && previewSender) previewSender();
   });
 
-  const BLOCK_NAMES = { header: 'Logo', happyHour: 'Happy Hour', gameday: 'Gameday', quickActions: 'Quick buttons', poll: 'Poll', message: 'Message card' };
+  const BLOCK_NAMES = { header: 'Logo', happyHour: 'Happy Hour', promos: 'Promos', gameday: 'Gameday', quickActions: 'Quick buttons', poll: 'Poll', message: 'Message card' };
   const BUTTON_NAMES = { order: 'Order Online', taps: 'View Tap List', checkin: 'Check In', poll: 'Today’s Poll' };
 
   function homeSection() {
@@ -372,7 +402,8 @@
         h('button', { class: 'ghost small', disabled: i === home.blocks.length - 1, 'aria-label': 'Move down', onclick: () => move(i, 1) }, '↓'),
         h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: b.visible, onchange: (e) => { b.visible = e.target.checked; draw(); schedule(); } }), 'Show'));
       const body = [];
-      if (b.type === 'happyHour') body.push(h('div', { class: 'row' }, field(b, 'title', 'Card title', { maxlength: 30 })));
+      if (b.type === 'happyHour') body.push(h('div', { class: 'row' }, field(b, 'title', 'Card title', { maxlength: 30 })), h('p', { class: 'hint' }, 'Prices by the hour are set in the Hours & Happy Hour tab.'));
+      if (b.type === 'promos') body.push(h('div', { class: 'row' }, field(b, 'title', 'Card title', { maxlength: 30 })), h('p', { class: 'hint' }, 'Today’s promos (set them in the Promos tab). Hidden when there are no promos at all.'));
       if (b.type === 'poll') body.push(h('div', { class: 'row' }, field(b, 'title', 'Heading', { maxlength: 40 })), h('p', { class: 'hint' }, 'Shows your featured poll (pick it in the Polls tab).'));
       if (b.type === 'header') body.push(h('p', { class: 'hint' }, 'The yellow Game On logo card.'));
       if (b.type === 'gameday') body.push(h('p', { class: 'hint' }, 'Upcoming games & specials (edit specials in the Gameday tab).'));
@@ -552,7 +583,7 @@
     );
   }
 
-  const TABS = { status: ['App Status', statusSection], home: ['Home Page', homeSection], menu: ['Menu', menuSection], checkins: ['Check-ins', checkinsSection], hours: ['Hours & Happy Hour', hoursSection], deals: ['6 PM Surprise', dealsSection], polls: ['Polls', pollsSection], gameday: ['Gameday', gamedaySection], soon: ['Coming Soon', comingSoonSection], showcase: ['We Made It', showcaseSection] };
+  const TABS = { status: ['App Status', statusSection], home: ['Home Page', homeSection], menu: ['Menu', menuSection], checkins: ['Check-ins', checkinsSection], hours: ['Hours & Happy Hour', hoursSection], promos: ['Promos', promosSection], polls: ['Polls', pollsSection], gameday: ['Gameday', gamedaySection], soon: ['Coming Soon', comingSoonSection], showcase: ['We Made It', showcaseSection] };
 
   function render() {
     headerRight.replaceChildren(h('button', { class: 'small', onclick: logout }, 'Sign out'));

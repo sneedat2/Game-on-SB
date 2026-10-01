@@ -10,7 +10,7 @@ import { AdminPreviewBanner, ClosedScreen } from '@/components/ClosedScreen';
 import { colors } from '@/constants/theme';
 import { useAppStatus } from '@/services/appStatus';
 import { loadContent } from '@/services/content';
-import { flashAlertsEnabled, initNotifications, registerPushToken, scheduleFlashDealAlerts } from '@/services/notifications';
+import { initNotifications, promoAlertsEnabled, registerPushToken, schedulePromoAlerts } from '@/services/notifications';
 
 initNotifications();
 
@@ -20,9 +20,9 @@ function useNotificationBootstrap() {
     const contentReady = loadContent().catch(() => null);
     if (Platform.OS === 'web') return;
     // Keep the rolling week of surprise alerts topped up every launch (after settings arrive).
-    void Promise.all([flashAlertsEnabled(), contentReady]).then(([on]) => {
+    void Promise.all([promoAlertsEnabled(), contentReady]).then(([on]) => {
       if (on) {
-        void scheduleFlashDealAlerts();
+        void schedulePromoAlerts();
         void registerPushToken();
       }
     });

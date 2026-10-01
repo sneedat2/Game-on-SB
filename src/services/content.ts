@@ -1,4 +1,4 @@
-import type { ComingSoonItem, GamedayEvent, HomeLayout, ShowcaseItem } from '@/types';
+import type { ComingSoonItem, GamedayEvent, HomeLayout, Promo, ShowcaseItem } from '@/types';
 import { apiFetch, ApiUnavailable } from './api';
 import { setSettings, type BarSettings } from './settings';
 
@@ -7,6 +7,8 @@ import { setSettings, type BarSettings } from './settings';
 export interface PublicContent {
   settings: BarSettings;
   home?: HomeLayout;
+  /** All promos' days & times (surprises without details) - for "next promo" and alerts. */
+  promoSchedule?: Promo[];
   gameday: GamedayEvent[];
   comingSoon: ComingSoonItem[];
   showcase: ShowcaseItem[];

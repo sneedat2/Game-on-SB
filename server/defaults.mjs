@@ -3,6 +3,7 @@
 import { randomUUID } from 'node:crypto';
 import { defaultCheckins } from './checkins.mjs';
 import { defaultHome } from './home.mjs';
+import { defaultPhases, promosFromOldFlashDeals } from './promos.mjs';
 
 const DAY_MS = 86_400_000;
 const id = () => randomUUID().slice(0, 8);
@@ -51,6 +52,25 @@ export function migrateContent(c) {
     c.maintenance = defaultMaintenance();
     changed = true;
   }
+  // Old fixed "6 PM Surprise" -> promo list (Mon/Tue/Wed kept), and happy hour gets its 3 tiers.
+  if (!Array.isArray(c.promos)) {
+    c.promos = promosFromOldFlashDeals(c.flashDeals, c.settings?.happyHour?.end, c.settings?.surpriseMinutes ?? 60);
+    delete c.flashDeals;
+    if (c.settings) delete c.settings.surpriseMinutes;
+    changed = true;
+  }
+  if (c.settings?.happyHour && !Array.isArray(c.settings.happyHour.phases)) {
+    c.settings.happyHour.phases = defaultPhases();
+    c.settings.happyHour.start = c.settings.happyHour.phases[0].start;
+    c.settings.happyHour.end = c.settings.happyHour.phases.at(-1).end;
+    changed = true;
+  }
+  if (c.home && !c.home.blocks?.some((b) => b.type === 'promos')) {
+    // New Home card: promos, placed right after Happy Hour.
+    const at = c.home.blocks.findIndex((b) => b.type === 'happyHour') + 1 || c.home.blocks.length;
+    c.home.blocks.splice(at, 0, { id: 'promos', type: 'promos', visible: true, title: 'Today’s Promos' });
+    changed = true;
+  }
   if (!c.home) {
     c.home = defaultHome();
     changed = true;
@@ -93,17 +113,10 @@ export function defaultContent() {
         { days: 'Mon–Sat', open: '11 AM', close: '9:30 PM' },
         { days: 'Sun', open: '11 AM', close: '9 PM' },
       ],
-      happyHour: { days: [1, 2, 3, 4, 5], start: '15:00', end: '18:00' },
-      surpriseMinutes: 60,
+      happyHour: { days: [1, 2, 3, 4, 5], start: '15:00', end: '18:00', phases: defaultPhases() },
     },
-    // 6 PM Surprise by weekday (0 = Sunday). Only happy-hour days are used.
-    flashDeals: {
-      1: { title: '$3 Drafts', description: 'Any 16 oz domestic draft for $3 until 7 PM.', finePrint: 'Dine-in only. Limit 3 per guest.' },
-      2: { title: '10 Wings for $8', description: 'Any flavor, traditional or boneless.', finePrint: 'Dine-in only. Limit 2 per guest.' },
-      3: { title: '$5 Stadium Pours', description: 'Any 22 oz domestic stadium pour for $5.', finePrint: 'Dine-in only.' },
-      4: { title: 'Free Pretzels w/ Pitcher', description: 'Order any pitcher, get pretzel sticks on us.', finePrint: 'Dine-in only. One per pitcher.' },
-      5: { title: '$4 Who Dey Shots', description: 'Our signature orange shot, 1 hour only.', finePrint: '21+. Drink responsibly.' },
-    },
+    // Promos with their own days & times (/admin → Promos). Starts empty.
+    promos: [],
     polls,
     votes: {}, // pollId -> optionId -> count
     voters: {}, // pollId -> deviceId -> optionId (one vote per device)

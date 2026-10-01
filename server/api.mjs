@@ -1,8 +1,8 @@
 // Content API for the app + admin editor.
 //
 // Public (the app):
-//   GET  /api/content                  hours, happy hour, upcoming games, Coming Soon, showcase
-//   GET  /api/flash-deal               today's 6 PM Surprise - only once it has unlocked
+//   GET  /api/content                  hours, happy hour tiers, home layout, promo schedule, games, Coming Soon, showcase
+//   GET  /api/promos/today             today's promos (surprise details only once they start)
 //   GET  /api/polls?device=<id>        open polls with vote counts + this device's votes
 //   POST /api/polls/<id>/vote          { deviceId, optionId }
 //   GET  /api/checkin?device=<id>      checked in today? + visit count
@@ -11,12 +11,13 @@
 //   POST /api/admin/login              { password } -> { token }
 //   GET  /api/admin/content            everything, including all polls and vote totals
 //   POST /api/admin/logout             clears the admin cookie
-//   PUT  /api/admin/<section>          replace one section (maintenance, settings, flashDeals, polls, gameday, comingSoon, showcase)
+//   PUT  /api/admin/<section>          replace one section (home, menuOverrides, maintenance, settings, promos, polls, gamedaySettings, gameday, comingSoon, showcase)
 import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import { adminEnabled, checkPassword, issueToken, loginAllowed, recordFailure, verifyToken } from './auth.mjs';
 import { checkinStats, evaluateCheckin, recordCheckin } from './checkins.mjs';
 import { validateHome } from './home.mjs';
+import { promoSchedule, todaysPromos, validatePhases, validatePromos } from './promos.mjs';
 import { MENU_SECTION_IDS, MENU_SECTIONS, withBase } from './menuOverrides.mjs';
 import { upcomingAutoGames } from './schedule.mjs';
 import { getCachedMenu, ToastConfigError } from './toastMenu.mjs';
@@ -88,7 +89,6 @@ const oneOf = (v, field, allowed) => (allowed.includes(v) ? v : fail(`${field} m
 const isoDate = (v, field) => (typeof v === 'string' && !Number.isNaN(Date.parse(v)) ? new Date(v).toISOString() : fail(`${field} must be a date`));
 const list = (v, field, max) => (Array.isArray(v) ? (v.length <= max ? v : fail(`${field}: at most ${max}`)) : fail(`${field} must be a list`));
 const keepId = (v) => (typeof v === 'string' && /^[\w-]{1,40}$/.test(v) ? v : newId());
-const hhmm = (v, field) => (typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : fail(`${field} must be a time like 15:00`));
 
 const TEAMS = ['bengals', 'bearcats', 'reds', 'fcc'];
 const POLL_CATEGORIES = ['food', 'drinks', 'events', 'debates'];
@@ -126,35 +126,20 @@ const validators = {
     const hh = v?.happyHour ?? {};
     const days = [...new Set(list(hh.days, 'Happy hour days', 7).map(Number))];
     if (days.some((d) => !Number.isInteger(d) || d < 0 || d > 6)) fail('Happy hour days must be 0–6');
-    const start = hhmm(hh.start, 'Happy hour start');
-    const end = hhmm(hh.end, 'Happy hour end');
-    if (end <= start) fail('Happy hour must end after it starts');
-    const surpriseMinutes = Number(v?.surpriseMinutes);
-    if (!Number.isInteger(surpriseMinutes) || surpriseMinutes < 0 || surpriseMinutes > 240) fail('Surprise length must be 0–240 minutes');
+    // Happy hour runs from the first tier's start to the last tier's end.
+    const phases = validatePhases(hh.phases ?? [], fail);
+    if (phases.length === 0) fail('Happy hour needs at least one part (e.g. 3–4 PM)');
     return {
       hours: list(v?.hours, 'Hours', 10).map((h, i) => ({
         days: str(h?.days, `Hours row ${i + 1} days`, 30),
         open: str(h?.open, `Hours row ${i + 1} open`, 20),
         close: str(h?.close, `Hours row ${i + 1} close`, 20),
       })),
-      happyHour: { days: days.sort(), start, end },
-      surpriseMinutes,
+      happyHour: { days: days.sort(), start: phases[0].start, end: phases.at(-1).end, phases },
     };
   },
 
-  flashDeals(v) {
-    const out = {};
-    for (let d = 0; d <= 6; d++) {
-      const deal = v?.[d];
-      if (!deal || !String(deal.title ?? '').trim()) continue;
-      out[d] = {
-        title: str(deal.title, 'Deal title', 60),
-        description: str(deal.description, 'Deal description', 200, { required: false }),
-        finePrint: str(deal.finePrint, 'Fine print', 200, { required: false }),
-      };
-    }
-    return out;
-  },
+  promos: (v) => validatePromos(v, fail),
 
   polls(v) {
     return list(v, 'Polls', 50).map((p, i) => {
@@ -242,8 +227,6 @@ function barClock(now = new Date()) {
   return { date, weekday: new Date(`${date}T12:00:00Z`).getUTCDay(), minutes: Number(p.hour) * 60 + Number(p.minute) };
 }
 
-const toMinutes = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
-
 function pollView(poll, c) {
   const counts = c.votes[poll.id] ?? {};
   return { ...poll, options: poll.options.map((o) => ({ ...o, votes: counts[o.id] ?? 0 })) };
@@ -274,6 +257,9 @@ async function publicContent(c) {
   return {
     settings: c.settings,
     home: c.home,
+    promoSchedule: promoSchedule(c.promos), // days/times only for surprises
+    // Lets the app know when "today" rolls over / a surprise unlocks without trusting phone clocks.
+    barToday: barClock().date,
     gameday: (await gamedayGames(c)).slice(0, 6),
     comingSoon: c.comingSoon,
     showcase: c.showcase,
@@ -308,7 +294,7 @@ function checkinAllowed(deviceId, ip) {
 /** Handles /api/content, /api/flash-deal, /api/polls*, /api/admin*. Returns false if not ours. */
 export async function handleContentApi(req, res, path) {
   try {
-    if (!['/api/content', '/api/flash-deal', '/api/polls', '/api/checkin', '/api/admin'].some((p) => path.startsWith(p))) {
+    if (!['/api/content', '/api/promos', '/api/polls', '/api/checkin', '/api/admin'].some((p) => path.startsWith(p))) {
       return false;
     }
     const c = getContent();
@@ -319,12 +305,9 @@ export async function handleContentApi(req, res, path) {
       return send(res, 200, await publicContent(c), { cors: true, cache: 'public, max-age=30' }), true;
     }
 
-    if (path === '/api/flash-deal' && req.method === 'GET') {
-      // The surprise stays a surprise: nothing is returned before it unlocks.
-      const { weekday, minutes } = barClock();
-      const hh = c.settings.happyHour;
-      const unlocked = hh.days.includes(weekday) && minutes >= toMinutes(hh.end) && minutes < toMinutes(hh.end) + c.settings.surpriseMinutes;
-      return send(res, 200, { deal: unlocked ? (c.flashDeals[weekday] ?? null) : null }, { cors: true }), true;
+    if (path === '/api/promos/today' && req.method === 'GET') {
+      // Surprise promos come back without details until they start.
+      return send(res, 200, { promos: todaysPromos(c.promos, barClock()) }, { cors: true }), true;
     }
 
     if (path === '/api/polls' && req.method === 'GET') {
@@ -434,7 +417,7 @@ export async function handleContentApi(req, res, path) {
         }
       }
 
-      const section = /^\/api\/admin\/(home|menuOverrides|maintenance|settings|flashDeals|polls|gamedaySettings|gameday|comingSoon|showcase)$/.exec(path)?.[1];
+      const section = /^\/api\/admin\/(home|menuOverrides|maintenance|settings|promos|polls|gamedaySettings|gameday|comingSoon|showcase)$/.exec(path)?.[1];
       if (section && req.method === 'PUT') {
         const clean = validators[section](await readJson(req));
         await update((draft) => {

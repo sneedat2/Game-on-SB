@@ -2,7 +2,7 @@
 // message cards. The app falls back to the same default if the server can't be reached.
 import { randomUUID } from 'node:crypto';
 
-const BUILT_IN = ['header', 'happyHour', 'gameday', 'quickActions', 'poll'];
+const BUILT_IN = ['header', 'happyHour', 'promos', 'gameday', 'quickActions', 'poll'];
 const BUTTON_KEYS = ['order', 'taps', 'checkin', 'poll'];
 const DEFAULT_BUTTON_LABELS = { order: 'Order Online', taps: 'View Tap List', checkin: 'Check In', poll: 'Today’s Poll' };
 
@@ -10,6 +10,7 @@ export const defaultHome = () => ({
   blocks: [
     { id: 'header', type: 'header', visible: true },
     { id: 'happyHour', type: 'happyHour', visible: true, title: 'Happy Hour' },
+    { id: 'promos', type: 'promos', visible: true, title: 'Today’s Promos' },
     { id: 'gameday', type: 'gameday', visible: true },
     { id: 'quickActions', type: 'quickActions', visible: true, buttons: BUTTON_KEYS.map((key) => ({ key, label: DEFAULT_BUTTON_LABELS[key], visible: true })) },
     { id: 'poll', type: 'poll', visible: true, title: 'Game On Wants to Know' },
@@ -38,6 +39,7 @@ export function validateHome(v, fail) {
       seen.add(b.type);
       const block = { id: b.type, type: b.type, visible };
       if (b.type === 'happyHour') block.title = text(b.title, 'Happy Hour title', 30) || 'Happy Hour';
+      if (b.type === 'promos') block.title = text(b.title, 'Promos title', 30) || 'Today’s Promos';
       if (b.type === 'poll') block.title = text(b.title, 'Poll heading', 40) || 'Game On Wants to Know';
       if (b.type === 'quickActions') {
         block.buttons = BUTTON_KEYS.map((key) => {

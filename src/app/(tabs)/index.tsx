@@ -1,10 +1,11 @@
 import { router } from 'expo-router';
 import { View } from 'react-native';
 import { BrandHeader } from '@/components/BrandHeader';
-import { FlashDealWidget } from '@/components/FlashDealWidget';
 import { GamedayBanner } from '@/components/GamedayBanner';
+import { HappyHourCard } from '@/components/HappyHourCard';
 import { MessageCard } from '@/components/MessageCard';
 import { PollCard } from '@/components/PollCard';
+import { PromoCard } from '@/components/PromoCard';
 import { QuickActions } from '@/components/QuickActions';
 import { ErrorState, LoadingState, Screen, SectionHeader } from '@/components/ui';
 import { useAsync } from '@/hooks/useAsync';
@@ -37,7 +38,9 @@ export default function HomeScreen() {
       case 'header':
         return <BrandHeader key={block.id} />;
       case 'happyHour':
-        return <FlashDealWidget key={block.id} title={block.title} />;
+        return <HappyHourCard key={block.id} title={block.title} />;
+      case 'promos':
+        return <PromoCard key={block.id} title={block.title} />;
       case 'gameday':
         return games.error ? (
           <ErrorState key={block.id} error={games.error} onRetry={games.reload} />

@@ -8,6 +8,7 @@ export const DEFAULT_HOME: HomeLayout = {
   blocks: [
     { id: 'header', type: 'header', visible: true },
     { id: 'happyHour', type: 'happyHour', visible: true, title: 'Happy Hour' },
+    { id: 'promos', type: 'promos', visible: true, title: 'Today’s Promos' },
     { id: 'gameday', type: 'gameday', visible: true },
     {
       id: 'quickActions',
