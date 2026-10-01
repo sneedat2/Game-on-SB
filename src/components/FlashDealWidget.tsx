@@ -35,7 +35,7 @@ function BigClock({ ms, long }: { ms: number; long?: boolean }) {
   );
 }
 
-export function FlashDealWidget() {
+export function FlashDealWidget({ title = 'Happy Hour' }: { title?: string }) {
   const now = useNow();
   const settings = useSettings();
   const hhLabel = happyHourLabel(settings);
@@ -96,7 +96,9 @@ export function FlashDealWidget() {
       <View className="flex-row items-center justify-between">
         <View className="flex-row items-center gap-2">
           <Gift size={18} color={colors.brand} />
-          <Text className="text-xs font-black uppercase tracking-[3px] text-chalk">Happy Hour</Text>
+          <Text className="flex-shrink text-xs font-black uppercase tracking-[3px] text-chalk" numberOfLines={1}>
+            {title}
+          </Text>
         </View>
         <Pressable
           onPress={toggleAlerts}

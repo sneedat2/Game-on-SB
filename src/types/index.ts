@@ -3,6 +3,20 @@
 
 export type Team = 'bengals' | 'bearcats' | 'reds' | 'fcc';
 
+// ---------- Home screen layout (/admin → Home Page) ----------
+
+export type QuickActionKey = 'order' | 'taps' | 'checkin' | 'poll';
+
+export type HomeBlock =
+  | { id: string; type: 'header' | 'gameday'; visible: boolean }
+  | { id: string; type: 'happyHour' | 'poll'; visible: boolean; title: string }
+  | { id: string; type: 'quickActions'; visible: boolean; buttons: { key: QuickActionKey; label: string; visible: boolean }[] }
+  | { id: string; type: 'message'; visible: boolean; title: string; text: string; style: 'yellow' | 'dark' };
+
+export interface HomeLayout {
+  blocks: HomeBlock[];
+}
+
 export interface GamedayEvent {
   id: string;
   team: Team;

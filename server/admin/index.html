@@ -38,6 +38,10 @@
   .votes { color:var(--muted); font-size:13px; text-align:right; }
   .login { max-width:360px; margin:60px auto; }
   .muted { color:var(--muted); }
+  .home-grid { display:grid; gap:12px; }
+  @media (min-width: 900px) { main { max-width:1200px; } .home-grid { grid-template-columns: minmax(0,1fr) minmax(0,1fr); align-items:start; } .preview-col { position:sticky; top:12px; } }
+  .preview-box { position:relative; overflow:hidden; margin:8px auto 0; border-radius:18px; border:1px solid var(--line); background:#0A0A0A; width:100%; }
+  .preview-frame { border:0; transform-origin:0 0; display:block; background:#0A0A0A; }
   .menu-item { border-top:1px solid var(--line); padding:12px 0 4px; }
   .hidden-item { opacity:.5; }
   .edited { color:var(--brand); font-size:12px; font-weight:700; }
@@ -123,6 +127,7 @@
         msg.className = 'msg ok'; msg.textContent = 'Saved ✓ - live in the app within a minute.';
         if (section === 'polls') { render(); toast('Polls saved ✓ - live in the app within a minute.'); } // redraw picks up new ids
         if (section === 'menuOverrides' && menuData) menuData.overrides = res.menuOverrides;
+        if (section === 'home') { render(); toast('Home page saved ✓ - guests see it within a minute.'); } // picks up new card ids
         if (section === 'maintenance') { render(); toast(res.maintenance.enabled ? 'App is now CLOSED to guests' : 'App is OPEN ✓'); }
       } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
       finally { btn.disabled = false; }
@@ -314,6 +319,98 @@
     ],
   });
 
+  // ---------- Home Page (layout + live preview) ----------
+  // The preview is the real app in a frame at /?homePreview=1. Your unsaved layout is sent to it as
+  // you edit; guests only see changes after "Save changes".
+  let previewSender = null;
+  let previewFit = null;
+  window.addEventListener('resize', () => previewFit?.());
+  window.addEventListener('message', (e) => {
+    if (e.origin === location.origin && e.data?.type === 'gameon:preview-ready' && previewSender) previewSender();
+  });
+
+  const BLOCK_NAMES = { header: 'Logo', happyHour: 'Happy Hour', gameday: 'Gameday', quickActions: 'Quick buttons', poll: 'Poll', message: 'Message card' };
+  const BUTTON_NAMES = { order: 'Order Online', taps: 'View Tap List', checkin: 'Check In', poll: 'Today’s Poll' };
+
+  function homeSection() {
+    const home = structuredClone(content.home ?? { blocks: [] });
+    let device = 'phone';
+
+    // ----- preview -----
+    const frame = h('iframe', { src: '/?homePreview=1', title: 'Home page preview', class: 'preview-frame' });
+    const frameBox = h('div', { class: 'preview-box' }, frame);
+    const send = () => frame.contentWindow?.postMessage({ type: 'gameon:home-preview', home }, location.origin);
+    previewSender = send;
+    let timer;
+    const schedule = () => { clearTimeout(timer); timer = setTimeout(send, 250); };
+    frame.addEventListener('load', () => setTimeout(send, 300));
+    const fit = () => {
+      const size = device === 'phone' ? { w: 390, h: 760 } : { w: 1280, h: 820 };
+      frameBox.style.maxWidth = device === 'phone' ? '390px' : '100%'; // set first, then measure
+      const scale = Math.min(1, (frameBox.clientWidth || size.w) / size.w);
+      frame.style.width = `${size.w}px`;
+      frame.style.height = `${size.h}px`;
+      frame.style.transform = `scale(${scale})`;
+      frameBox.style.height = `${Math.round(size.h * scale)}px`;
+    };
+    const deviceBtn = (key, label) => h('button', { class: `small ${device === key ? 'primary' : 'ghost'}`, onclick: () => { device = key; drawDeviceButtons(); fit(); } }, label);
+    const deviceRow = h('div', { class: 'row' });
+    const drawDeviceButtons = () => deviceRow.replaceChildren(deviceBtn('phone', '📱 Phone'), deviceBtn('web', '🖥️ Website'), h('span', { class: 'muted', style: 'flex:1;text-align:right' }, 'Preview - not saved yet'));
+    drawDeviceButtons();
+    previewFit = fit;
+    setTimeout(fit, 0); // once the tab is on screen and has a width
+
+    // ----- editor -----
+    const list = h('div');
+    const move = (i, d) => { const j = i + d; if (j < 0 || j >= home.blocks.length) return; [home.blocks[i], home.blocks[j]] = [home.blocks[j], home.blocks[i]]; draw(); schedule(); };
+    const field = (obj, key, label, attrs = {}) => h('label', {}, label, h('input', { value: obj[key] ?? '', ...attrs, oninput: (e) => { obj[key] = e.target.value; schedule(); } }));
+
+    function blockCard(b, i) {
+      const head = h('div', { class: 'row', style: 'align-items:center' },
+        h('strong', { style: 'flex:1;font-size:16px' }, `${i + 1}. ${BLOCK_NAMES[b.type] ?? b.type}${b.type === 'message' && b.title ? ` - ${b.title}` : ''}`),
+        h('button', { class: 'ghost small', disabled: i === 0, 'aria-label': 'Move up', onclick: () => move(i, -1) }, '↑'),
+        h('button', { class: 'ghost small', disabled: i === home.blocks.length - 1, 'aria-label': 'Move down', onclick: () => move(i, 1) }, '↓'),
+        h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: b.visible, onchange: (e) => { b.visible = e.target.checked; draw(); schedule(); } }), 'Show'));
+      const body = [];
+      if (b.type === 'happyHour') body.push(h('div', { class: 'row' }, field(b, 'title', 'Card title', { maxlength: 30 })));
+      if (b.type === 'poll') body.push(h('div', { class: 'row' }, field(b, 'title', 'Heading', { maxlength: 40 })), h('p', { class: 'hint' }, 'Shows your featured poll (pick it in the Polls tab).'));
+      if (b.type === 'header') body.push(h('p', { class: 'hint' }, 'The yellow Game On logo card.'));
+      if (b.type === 'gameday') body.push(h('p', { class: 'hint' }, 'Upcoming games & specials (edit specials in the Gameday tab).'));
+      if (b.type === 'quickActions') {
+        body.push(...b.buttons.map((btn) => h('div', { class: 'row' },
+          h('label', {}, BUTTON_NAMES[btn.key], h('input', { value: btn.label, maxlength: 24, oninput: (e) => { btn.label = e.target.value; schedule(); } })),
+          h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: btn.visible, onchange: (e) => { btn.visible = e.target.checked; schedule(); } }), 'Show'))));
+      }
+      if (b.type === 'message') {
+        body.push(
+          h('div', { class: 'row' }, field(b, 'title', 'Title', { maxlength: 60, placeholder: 'Monday Special' }),
+            h('label', {}, 'Color', h('select', { onchange: (e) => { b.style = e.target.value; schedule(); } },
+              h('option', { value: 'yellow', selected: b.style !== 'dark' }, 'Yellow'), h('option', { value: 'dark', selected: b.style === 'dark' }, 'Dark')))),
+          h('div', { class: 'row' }, h('label', {}, 'Message', h('textarea', { value: b.text ?? '', maxlength: 300, placeholder: '$7 burgers all day!', oninput: (e) => { b.text = e.target.value; schedule(); } }))),
+          h('div', { class: 'row' }, h('span', { style: 'flex:1' }), h('button', { class: 'danger small', onclick: () => { home.blocks.splice(i, 1); draw(); schedule(); } }, 'Delete card')));
+      }
+      return h('div', { class: `card${b.visible ? '' : ' hidden-item'}` }, head, ...body);
+    }
+
+    function draw() { list.replaceChildren(...home.blocks.map(blockCard)); }
+    draw();
+
+    const addMessage = h('button', { class: 'ghost', onclick: () => {
+      const at = home.blocks.findIndex((b) => b.type === 'header') + 1; // right under the logo
+      home.blocks.splice(at, 0, { id: '', type: 'message', visible: true, title: '', text: '', style: 'yellow' });
+      draw(); schedule();
+    } }, '+ Add message card');
+
+    return [
+      h('h2', {}, 'Home Page'),
+      h('p', { class: 'hint' }, 'Reorder with ↑ ↓, hide anything, change labels, or add message cards. Check the preview, then Save.'),
+      h('div', { class: 'home-grid' },
+        h('div', {}, addMessage, list),
+        h('div', { class: 'preview-col' }, h('div', { class: 'card' }, deviceRow, frameBox))),
+      saveBar('home', () => home),
+    ];
+  }
+
   // ---------- Check-ins ----------
   function checkinsSection() {
     const wrap = h('div', {}, h('p', { class: 'muted' }, 'Loading…'));
@@ -455,7 +552,7 @@
     );
   }
 
-  const TABS = { status: ['App Status', statusSection], menu: ['Menu', menuSection], checkins: ['Check-ins', checkinsSection], hours: ['Hours & Happy Hour', hoursSection], deals: ['6 PM Surprise', dealsSection], polls: ['Polls', pollsSection], gameday: ['Gameday', gamedaySection], soon: ['Coming Soon', comingSoonSection], showcase: ['We Made It', showcaseSection] };
+  const TABS = { status: ['App Status', statusSection], home: ['Home Page', homeSection], menu: ['Menu', menuSection], checkins: ['Check-ins', checkinsSection], hours: ['Hours & Happy Hour', hoursSection], deals: ['6 PM Surprise', dealsSection], polls: ['Polls', pollsSection], gameday: ['Gameday', gamedaySection], soon: ['Coming Soon', comingSoonSection], showcase: ['We Made It', showcaseSection] };
 
   function render() {
     headerRight.replaceChildren(h('button', { class: 'small', onclick: logout }, 'Sign out'));

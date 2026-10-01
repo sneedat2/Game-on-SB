@@ -1,4 +1,4 @@
-import type { ComingSoonItem, GamedayEvent, ShowcaseItem } from '@/types';
+import type { ComingSoonItem, GamedayEvent, HomeLayout, ShowcaseItem } from '@/types';
 import { apiFetch, ApiUnavailable } from './api';
 import { setSettings, type BarSettings } from './settings';
 
@@ -6,6 +6,7 @@ import { setSettings, type BarSettings } from './settings';
 // 30 seconds; `null` means the server isn't reachable and callers use built-in sample data.
 export interface PublicContent {
   settings: BarSettings;
+  home?: HomeLayout;
   gameday: GamedayEvent[];
   comingSoon: ComingSoonItem[];
   showcase: ShowcaseItem[];
