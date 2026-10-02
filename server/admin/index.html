@@ -47,6 +47,35 @@
   .edited { color:var(--brand); font-size:12px; font-weight:700; }
   .banner.closed { background:#3a1111; border-color:var(--danger); color:#fca5a5; }
   button.closed { background:var(--danger); color:#fff; }
+  /* Quick Lunch demo (admin-only, simulated) */
+  .demo-banner { background:#1d2a12; border:1px solid var(--ok); color:#bbf7d0; padding:10px 12px; border-radius:10px; margin-bottom:12px; font-size:14px; }
+  .scene-row { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+  .tables-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-top:8px; }
+  .tbl { border-radius:12px; padding:12px 4px; text-align:center; font-weight:800; border:2px solid var(--ok); background:#12301d; color:#bbf7d0; }
+  .tbl small { display:block; font-weight:600; font-size:11px; opacity:.85; }
+  .tbl.busy { border-color:var(--danger); background:#3a1111; color:#fecaca; }
+  .status-line { margin-top:10px; padding:10px 12px; border-radius:10px; background:var(--card2); font-size:14px; }
+  .status-line.go { border-left:4px solid var(--ok); } .status-line.stop { border-left:4px solid var(--danger); }
+  .phone { width:340px; max-width:100%; margin:0 auto; border:10px solid #222; border-radius:36px; background:#0A0A0A; padding:14px 12px 18px; box-shadow:0 10px 40px rgba(0,0,0,.6); }
+  .phone .notch { width:110px; height:18px; background:#222; border-radius:0 0 12px 12px; margin:-14px auto 12px; }
+  .ph-logo { background:var(--brand); color:#1C1C1C; border-radius:18px; text-align:center; padding:12px 8px; font-weight:900; letter-spacing:2px; font-size:22px; }
+  .ph-logo small { display:block; font-size:9px; letter-spacing:2px; font-weight:600; }
+  .ph-card { margin-top:12px; border-radius:20px; border:1px solid var(--line); background:var(--card); padding:14px; }
+  .ph-card.live { border-color:var(--brand); }
+  .ph-label { font-size:10px; font-weight:900; letter-spacing:2px; text-transform:uppercase; color:var(--text); display:flex; justify-content:space-between; align-items:center; }
+  .pill { font-size:10px; font-weight:800; border-radius:999px; padding:3px 8px; letter-spacing:.5px; }
+  .pill.open { background:var(--ok); color:#06210f; } .pill.full { background:var(--danger); color:#fff; } .pill.soon { background:var(--card2); color:var(--muted); }
+  .ph-headline { font-size:20px; font-weight:900; color:var(--brand); margin-top:8px; line-height:1.15; }
+  .ph-msg { color:var(--muted); font-size:13px; margin-top:4px; }
+  .ph-picks { margin-top:10px; display:grid; gap:6px; }
+  .ph-pick { display:flex; justify-content:space-between; background:var(--card2); border-radius:10px; padding:8px 10px; font-size:13px; font-weight:600; }
+  .ph-btn { display:block; width:100%; margin-top:10px; border:0; border-radius:12px; padding:12px; font-weight:800; font-size:15px; background:var(--brand); color:#0A0A0A; cursor:pointer; }
+  .ph-btn.alt { background:var(--card2); color:var(--muted); font-size:13px; }
+  .ph-full { margin-top:10px; border-radius:12px; padding:12px; background:#2a1010; border:1px solid #5b1d1d; color:#fecaca; font-size:14px; text-align:center; }
+  .ph-ghost { margin-top:12px; border:1px dashed var(--line); border-radius:16px; padding:18px; text-align:center; color:var(--muted); font-size:13px; }
+  .ph-next { margin-top:12px; border-radius:20px; border:1px solid var(--line); background:var(--card); padding:12px; color:var(--muted); font-size:12px; }
+  .why { margin-top:12px; font-size:13px; color:var(--muted); text-align:center; }
+  .how li { margin:6px 0; color:var(--text); font-size:14px; } .how li span { color:var(--muted); }
   .toast { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--brand); color:#0A0A0A; font-weight:700; padding:10px 16px; border-radius:10px; box-shadow:0 6px 24px rgba(0,0,0,.5); z-index:10; }
 </style>
 </head>
@@ -583,7 +612,168 @@
     );
   }
 
-  const TABS = { status: ['App Status', statusSection], home: ['Home Page', homeSection], menu: ['Menu', menuSection], checkins: ['Check-ins', checkinsSection], hours: ['Hours & Happy Hour', hoursSection], promos: ['Promos', promosSection], polls: ['Polls', pollsSection], gameday: ['Gameday', gamedaySection], soon: ['Coming Soon', comingSoonSection], showcase: ['We Made It', showcaseSection] };
+  // ---------- 💡 Quick Lunch demo (admin-only, fully simulated, nothing is saved) ----------
+  // A presentation of the idea: a lunch card (11:30–1:30) with "Order lunch ahead" that switches
+  // off when tables are full (auto from Toast open checks, or a manual switch), plus Toast's
+  // kitchen-capacity throttling. Everything here is pretend data in this browser tab.
+  const lunchDemo = {
+    minutes: 12 * 60 + 5,
+    tables: [1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1].map(Boolean), // true = seated (open check)
+    minFree: 2,
+    manualFull: false,
+    ordersLast15: 4,
+    capacity: 8, // Toast kitchen capacity: orders per 15 minutes
+    start: '11:30',
+    end: '13:30',
+    headline: 'Quick Lunch: in & out on your break',
+    message: 'Order ahead and it’s ready when you walk in. Grab a table and get back on time.',
+    picks: 'Crispy Chicken Bacon Ranch Wrap | 13\nBuild Your Own Burger | 12\nChicken Tenders | 10.50\nPhilly Wrap | 12',
+  };
+
+  const LUNCH_SCENES = {
+    'Before lunch': { minutes: 11 * 60, seated: 3, orders: 0, manualFull: false },
+    'Quiet lunch': { minutes: 12 * 60 + 20, seated: 6, orders: 3, manualFull: false },
+    'Lunch rush': { minutes: 12 * 60 + 10, seated: 11, orders: 11, manualFull: false },
+    'After lunch': { minutes: 13 * 60 + 45, seated: 4, orders: 1, manualFull: false },
+  };
+
+  function lunchDemoSection() {
+    const d = lunchDemo;
+    const toMin = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+    const fmt = (m) => { const h24 = Math.floor(m / 60), mm = m % 60, h = h24 % 12 || 12; return `${h}:${String(mm).padStart(2, '0')} ${h24 >= 12 ? 'PM' : 'AM'}`; };
+    const fmtT = (t) => fmt(toMin(t));
+    const picks = () => d.picks.split('\n').map((l) => l.split('|').map((x) => x.trim())).filter(([n]) => n);
+
+    // Status line + phone get redrawn on every change.
+    const statusBox = h('div');
+    const phoneBox = h('div');
+    const tablesBox = h('div', { class: 'tables-grid' });
+    const clockLabel = h('strong', {});
+    const clock = h('input', { type: 'range', min: 630, max: 870, step: 5, value: d.minutes, oninput: (e) => { d.minutes = Number(e.target.value); update(); } });
+    const ordersLabel = h('strong', {});
+    const orders = h('input', { type: 'range', min: 0, max: 16, step: 1, value: d.ordersLast15, oninput: (e) => { d.ordersLast15 = Number(e.target.value); update(); } });
+
+    function state() {
+      const free = d.tables.filter((t) => !t).length;
+      const inWindow = d.minutes >= toMin(d.start) && d.minutes < toMin(d.end);
+      const before = d.minutes < toMin(d.start);
+      const autoFull = free < d.minFree;
+      const full = d.manualFull || autoFull;
+      const readyIn = 15 + Math.floor(d.ordersLast15 / d.capacity) * 15; // Toast pushes quotes back per 15-min block
+      return { free, inWindow, before, autoFull, full, readyIn };
+    }
+
+    function drawTables() {
+      tablesBox.replaceChildren(...d.tables.map((busy, i) => h('button', {
+        class: `tbl${busy ? ' busy' : ''}`,
+        onclick: () => { d.tables[i] = !d.tables[i]; update(); },
+        'aria-label': `Table ${i + 1} ${busy ? 'seated' : 'open'}`,
+      }, `T${i + 1}`, h('small', {}, busy ? 'Seated' : 'Open'))));
+    }
+
+    function drawStatus() {
+      const s = state();
+      clockLabel.textContent = fmt(d.minutes);
+      ordersLabel.textContent = `${d.ordersLast15} orders`;
+      let line, go;
+      if (!s.inWindow) { line = s.before ? `Before ${fmtT(d.start)}: the card shows a “starts at” teaser - ordering isn’t open yet.` : `After ${fmtT(d.end)}: the Quick Lunch card is hidden.`; go = false; }
+      else if (d.manualFull) { line = 'Staff flipped “Lunch is full” → order button hidden for everyone.'; go = false; }
+      else if (s.autoFull) { line = `Only ${s.free} table${s.free === 1 ? '' : 's'} free (minimum ${d.minFree}) → order button hidden automatically.`; go = false; }
+      else { line = `${s.free} tables free (minimum ${d.minFree}) → guests can order ahead. Toast quotes ready in ~${s.readyIn} min.`; go = true; }
+      statusBox.replaceChildren(h('div', { class: `status-line ${go ? 'go' : 'stop'}` }, line));
+    }
+
+    function drawPhone() {
+      const s = state();
+      const pickRows = h('div', { class: 'ph-picks' }, picks().map(([name, price]) => h('div', { class: 'ph-pick' }, h('span', {}, name), h('span', {}, price ? `$${Number(price).toFixed(2)}` : ''))));
+      let card;
+      if (!s.inWindow && !s.before) {
+        card = h('div', { class: 'ph-ghost' }, `(Quick Lunch card is hidden after ${fmtT(d.end)} - it comes back tomorrow at ${fmtT(d.start)})`);
+      } else {
+        const pill = s.before ? h('span', { class: 'pill soon' }, `STARTS ${fmtT(d.start)}`) : s.full ? h('span', { class: 'pill full' }, 'FULL RIGHT NOW') : h('span', { class: 'pill open' }, `OPEN · UNTIL ${fmtT(d.end)}`);
+        const action = s.before
+          ? h('button', { class: 'ph-btn alt', disabled: true }, `Lunch ordering opens at ${fmtT(d.start)}`)
+          : s.full
+            ? h('div', { class: 'ph-full' }, h('strong', {}, 'We’re packed right now 🍻'), h('div', { style: 'margin-top:4px' }, 'Walk-ins welcome at the bar - or check back in a few minutes.'))
+            : [
+              h('button', { class: 'ph-btn', onclick: () => toast('Demo: this would open your Toast ordering page') }, `Order lunch ahead · ready in ~${s.readyIn} min`),
+              h('button', { class: 'ph-btn alt', onclick: () => toast('Demo: needs Toast Order & Pay (table QR codes)') }, 'Order from your table (with Toast Order & Pay)'),
+            ];
+        card = h('div', { class: `ph-card${s.inWindow && !s.full ? ' live' : ''}` },
+          h('div', { class: 'ph-label' }, h('span', {}, '🥪 Quick Lunch'), pill),
+          h('div', { class: 'ph-headline' }, d.headline),
+          h('div', { class: 'ph-msg' }, d.message),
+          s.inWindow && !s.full ? h('div', { class: 'ph-msg', style: 'color:#bbf7d0' }, `${s.free} tables open now`) : '',
+          pickRows,
+          action);
+      }
+      phoneBox.replaceChildren(
+        h('div', { class: 'phone' }, h('div', { class: 'notch' }),
+          h('div', { class: 'ph-logo' }, 'GAME ON', h('small', {}, 'WESTSIDE. STRONGSIDE.')),
+          card,
+          h('div', { class: 'ph-next' }, '… rest of Home (Happy Hour, Promos, Gameday, polls) …')),
+        h('div', { class: 'why' }, `Guest’s view at ${fmt(d.minutes)} - simulated`));
+    }
+
+    function update() { drawTables(); drawStatus(); drawPhone(); }
+
+    function scene(name) {
+      const sc = LUNCH_SCENES[name];
+      d.minutes = sc.minutes; d.ordersLast15 = sc.orders; d.manualFull = sc.manualFull;
+      const order = [0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11];
+      d.tables = d.tables.map(() => false);
+      order.slice(0, sc.seated).forEach((i) => (d.tables[i] = true));
+      clock.value = d.minutes; orders.value = d.ordersLast15; manual.checked = d.manualFull;
+      update();
+    }
+
+    const manual = h('input', { type: 'checkbox', checked: d.manualFull, onchange: (e) => { d.manualFull = e.target.checked; update(); } });
+    const bind = (key, label, attrs = {}, area = false) => h('label', {}, label, h(area ? 'textarea' : 'input', { value: d[key], ...attrs, oninput: (e) => { d[key] = e.target.value; update(); } }));
+
+    update();
+    return [
+      h('h2', {}, '💡 Quick Lunch - Demo'),
+      h('div', { class: 'demo-banner' }, 'Demo only - pretend data in this tab. Nothing is saved and guests don’t see any of this. Use it to show how the idea would work.'),
+      h('div', { class: 'scene-row' }, h('span', { class: 'muted', style: 'align-self:center' }, 'Jump to:'), Object.keys(LUNCH_SCENES).map((n) => h('button', { class: 'ghost small', onclick: () => scene(n) }, n))),
+      h('div', { class: 'home-grid' },
+        h('div', {},
+          h('div', { class: 'card' },
+            h('div', { class: 'row' }, h('span', { style: 'flex:1' }, '🕐 Time of day'), clockLabel),
+            clock,
+            statusBox),
+          h('div', { class: 'card' },
+            h('div', { class: 'row' }, h('strong', { style: 'flex:1' }, '🍽️ Floor plan (from Toast open checks)'), h('span', { class: 'muted' }, 'tap to seat / clear')),
+            tablesBox,
+            h('div', { class: 'row', style: 'margin-top:10px' },
+              h('label', {}, 'Hide ordering when free tables drop below', h('input', { type: 'number', min: 0, max: 12, value: d.minFree, oninput: (e) => { d.minFree = Number(e.target.value) || 0; update(); } })),
+              h('button', { class: 'ghost small', onclick: () => { d.tables = d.tables.map(() => true); update(); } }, 'Seat all'),
+              h('button', { class: 'ghost small', onclick: () => { d.tables = d.tables.map(() => false); update(); } }, 'Clear all')),
+            h('label', { class: 'check', style: 'margin-top:6px' }, manual, 'Staff switch: “Lunch is full” (overrides everything)')),
+          h('div', { class: 'card' },
+            h('div', { class: 'row' }, h('strong', { style: 'flex:1' }, '👨‍🍳 Toast kitchen limit'), ordersLabel),
+            h('p', { class: 'hint' }, `Orders in the last 15 minutes (limit ${d.capacity} per 15 min). Over the limit, Toast pushes the ready time back instead of overloading the kitchen.`),
+            orders),
+          h('div', { class: 'card' },
+            h('strong', {}, '✏️ What the owner would edit'),
+            h('div', { class: 'row', style: 'margin-top:8px' },
+              h('label', {}, 'Starts', h('input', { type: 'time', value: d.start, oninput: (e) => { d.start = e.target.value || d.start; update(); } })),
+              h('label', {}, 'Ends', h('input', { type: 'time', value: d.end, oninput: (e) => { d.end = e.target.value || d.end; update(); } }))),
+            h('div', { class: 'row' }, bind('headline', 'Headline', { maxlength: 60 })),
+            h('div', { class: 'row' }, bind('message', 'Message', { maxlength: 160 }, true)),
+            h('div', { class: 'row' }, bind('picks', 'Lunch picks (Name | price, one per line)', {}, true)))),
+        h('div', { class: 'preview-col' }, phoneBox)),
+      h('div', { class: 'card how' },
+        h('strong', {}, 'How it would work for real'),
+        h('ul', {},
+          h('li', {}, 'Lunch card shows Mon–Fri during the lunch window. ', h('span', {}, 'Times, message and picks are edited in this admin.')),
+          h('li', {}, 'Every minute the app counts tables with an open check in Toast. ', h('span', {}, 'Needs servers to ring checks on tables (floor plan) and Toast API access to orders + tables.')),
+          h('li', {}, 'Below the minimum free tables, the order button hides automatically. ', h('span', {}, 'Staff can also flip “Lunch is full” from a phone at any time.')),
+          h('li', {}, 'Toast kitchen-capacity throttling protects the kitchen. ', h('span', {}, 'Set in Toast: X orders per 15 min - even orders placed straight on the Toast page are covered.')),
+          h('li', {}, 'Optional: Toast scheduled orders (pick a ready time) and Toast Order & Pay (order from the table by QR code). ', h('span', {}, 'Both are switched on in Toast.')))),
+    ];
+  }
+
+  const TABS = { status: ['App Status', statusSection], home: ['Home Page', homeSection], menu: ['Menu', menuSection], checkins: ['Check-ins', checkinsSection], hours: ['Hours & Happy Hour', hoursSection], promos: ['Promos', promosSection], polls: ['Polls', pollsSection], gameday: ['Gameday', gamedaySection], soon: ['Coming Soon', comingSoonSection], showcase: ['We Made It', showcaseSection], lunchDemo: ['💡 Quick Lunch Demo', lunchDemoSection] };
 
   function render() {
     headerRight.replaceChildren(h('button', { class: 'small', onclick: logout }, 'Sign out'));
