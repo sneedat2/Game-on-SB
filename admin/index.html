@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>Game On Admin</title>
+<style>
+  :root { --bg:#0A0A0A; --card:#151515; --card2:#1F1F1F; --line:#2C2C2C; --text:#F5F5F5; --muted:#A3A3A3; --brand:#FFC72C; --danger:#EF4444; --ok:#22C55E; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  header { background:var(--brand); color:#0A0A0A; padding:14px 16px; font-weight:900; letter-spacing:2px; display:flex; justify-content:space-between; align-items:center; }
+  header button { background:#0A0A0A; color:var(--brand); }
+  main { max-width:860px; margin:0 auto; padding:16px; }
+  h2 { margin:8px 0 4px; font-size:22px; }
+  p.hint { color:var(--muted); margin:0 0 14px; font-size:13px; }
+  nav { display:flex; gap:6px; overflow-x:auto; padding-bottom:6px; margin-bottom:12px; }
+  nav button { background:var(--card); color:var(--text); border:1px solid var(--line); white-space:nowrap; }
+  nav button.active { background:var(--brand); color:#0A0A0A; border-color:var(--brand); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-bottom:8px; }
+  .row > label { flex:1 1 160px; }
+  label { display:block; font-size:12px; color:var(--muted); font-weight:600; }
+  label.check { display:flex; gap:6px; align-items:center; color:var(--text); font-size:14px; flex:0 0 auto; }
+  input, select, textarea { width:100%; margin-top:4px; background:var(--card2); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:9px 10px; font:inherit; }
+  input[type=checkbox] { width:auto; margin:0; accent-color:var(--brand); }
+  textarea { min-height:70px; resize:vertical; }
+  button { cursor:pointer; border:0; border-radius:10px; padding:9px 14px; font:inherit; font-weight:700; }
+  .primary { background:var(--brand); color:#0A0A0A; }
+  .ghost { background:transparent; color:var(--brand); border:1px dashed var(--line); }
+  .danger { background:transparent; color:var(--danger); border:1px solid #4a1d1d; }
+  .small { padding:6px 10px; font-size:13px; }
+  .bar { position:sticky; bottom:0; background:linear-gradient(transparent, var(--bg) 30%); padding:16px 0 8px; display:flex; gap:10px; align-items:center; }
+  .msg { font-size:14px; }
+  .msg.ok { color:var(--ok); } .msg.err { color:var(--danger); }
+  .banner { background:#3a2a00; border:1px solid var(--brand); color:var(--brand); padding:10px 12px; border-radius:10px; margin-bottom:12px; font-size:14px; }
+  .opt { display:grid; grid-template-columns:64px 1fr 70px auto; gap:6px; align-items:center; margin-top:6px; }
+  .votes { color:var(--muted); font-size:13px; text-align:right; }
+  .login { max-width:360px; margin:60px auto; }
+  .muted { color:var(--muted); }
+  .home-grid { display:grid; gap:12px; }
+  @media (min-width: 900px) { main { max-width:1200px; } .home-grid { grid-template-columns: minmax(0,1fr) minmax(0,1fr); align-items:start; } .preview-col { position:sticky; top:12px; } }
+  .preview-box { position:relative; overflow:hidden; margin:8px auto 0; border-radius:18px; border:1px solid var(--line); background:#0A0A0A; width:100%; }
+  .preview-frame { border:0; transform-origin:0 0; display:block; background:#0A0A0A; }
+  .menu-item { border-top:1px solid var(--line); padding:12px 0 4px; }
+  .hidden-item { opacity:.5; }
+  .edited { color:var(--brand); font-size:12px; font-weight:700; }
+  .banner.closed { background:#3a1111; border-color:var(--danger); color:#fca5a5; }
+  button.closed { background:var(--danger); color:#fff; }
+  /* Quick Lunch demo (admin-only, simulated) */
+  .demo-banner { background:#1d2a12; border:1px solid var(--ok); color:#bbf7d0; padding:10px 12px; border-radius:10px; margin-bottom:12px; font-size:14px; }
+  .scene-row { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+  .tables-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-top:8px; }
+  .tbl { border-radius:12px; padding:12px 4px; text-align:center; font-weight:800; border:2px solid var(--ok); background:#12301d; color:#bbf7d0; }
+  .tbl small { display:block; font-weight:600; font-size:11px; opacity:.85; }
+  .tbl.busy { border-color:var(--danger); background:#3a1111; color:#fecaca; }
+  .status-line { margin-top:10px; padding:10px 12px; border-radius:10px; background:var(--card2); font-size:14px; }
+  .status-line.go { border-left:4px solid var(--ok); } .status-line.stop { border-left:4px solid var(--danger); }
+  .phone { width:340px; max-width:100%; margin:0 auto; border:10px solid #222; border-radius:36px; background:#0A0A0A; padding:14px 12px 18px; box-shadow:0 10px 40px rgba(0,0,0,.6); }
+  .phone .notch { width:110px; height:18px; background:#222; border-radius:0 0 12px 12px; margin:-14px auto 12px; }
+  .ph-logo { background:var(--brand); color:#1C1C1C; border-radius:18px; text-align:center; padding:12px 8px; font-weight:900; letter-spacing:2px; font-size:22px; }
+  .ph-logo small { display:block; font-size:9px; letter-spacing:2px; font-weight:600; }
+  .ph-card { margin-top:12px; border-radius:20px; border:1px solid var(--line); background:var(--card); padding:14px; }
+  .ph-card.live { border-color:var(--brand); }
+  .ph-label { font-size:10px; font-weight:900; letter-spacing:2px; text-transform:uppercase; color:var(--text); display:flex; justify-content:space-between; align-items:center; }
+  .pill { font-size:10px; font-weight:800; border-radius:999px; padding:3px 8px; letter-spacing:.5px; }
+  .pill.open { background:var(--ok); color:#06210f; } .pill.full { background:var(--danger); color:#fff; } .pill.soon { background:var(--card2); color:var(--muted); }
+  .ph-headline { font-size:20px; font-weight:900; color:var(--brand); margin-top:8px; line-height:1.15; }
+  .ph-msg { color:var(--muted); font-size:13px; margin-top:4px; }
+  .ph-picks { margin-top:10px; display:grid; gap:6px; }
+  .ph-pick { display:flex; justify-content:space-between; background:var(--card2); border-radius:10px; padding:8px 10px; font-size:13px; font-weight:600; }
+  .ph-btn { display:block; width:100%; margin-top:10px; border:0; border-radius:12px; padding:12px; font-weight:800; font-size:15px; background:var(--brand); color:#0A0A0A; cursor:pointer; }
+  .ph-btn.alt { background:var(--card2); color:var(--muted); font-size:13px; }
+  .ph-full { margin-top:10px; border-radius:12px; padding:12px; background:#2a1010; border:1px solid #5b1d1d; color:#fecaca; font-size:14px; text-align:center; }
+  .ph-ghost { margin-top:12px; border:1px dashed var(--line); border-radius:16px; padding:18px; text-align:center; color:var(--muted); font-size:13px; }
+  .ph-next { margin-top:12px; border-radius:20px; border:1px solid var(--line); background:var(--card); padding:12px; color:var(--muted); font-size:12px; }
+  .why { margin-top:12px; font-size:13px; color:var(--muted); text-align:center; }
+  .how li { margin:6px 0; color:var(--text); font-size:14px; } .how li span { color:var(--muted); }
+  .toast { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--brand); color:#0A0A0A; font-weight:700; padding:10px 16px; border-radius:10px; box-shadow:0 6px 24px rgba(0,0,0,.5); z-index:10; }
+</style>
+</head>
+<body>
+<header><span>GAME ON · ADMIN</span><span id="headerRight"></span></header>
+<main id="app"></main>
+<script>
+(() => {
+  'use strict';
+  const app = document.getElementById('app');
+  const headerRight = document.getElementById('headerRight');
+  const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const TEAMS = { bengals: 'Bengals', bearcats: 'Bearcats', reds: 'Reds', fcc: 'FC Cincinnati' };
+  const CATEGORIES = { food: 'Food', drinks: 'Drinks', events: 'Events', debates: 'Fun Debates' };
+  const STATUS = { 'on-menu': 'On the menu', 'coming-soon': 'Coming soon', 'event-booked': 'Event booked' };
+
+  let token = null;
+  try { token = sessionStorage.getItem('gameon-admin'); } catch {}
+  let content = null;
+  let tab = 'status';
+
+  // Safe DOM builder - user text only ever goes in via textContent/value.
+  function h(tag, props = {}, ...kids) {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(props)) {
+      if (k === 'class') el.className = v;
+      else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+      else if (k === 'value') el.value = v ?? '';
+      else if (k === 'checked') el.checked = Boolean(v);
+      else if (v !== undefined && v !== null && v !== false) el.setAttribute(k, v === true ? '' : v);
+    }
+    for (const kid of kids.flat()) if (kid !== null && kid !== undefined && kid !== false) el.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
+    return el;
+  }
+
+  async function api(path, opts = {}) {
+    const res = await fetch(path, {
+      ...opts,
+      headers: { 'Content-Type': 'application/json', ...(token ? { 'X-Admin-Token': token } : {}) },
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.status === 401 && path !== '/api/admin/login') { logout(); throw new Error('Please sign in again'); }
+    if (!res.ok) throw new Error(body.error || `Error ${res.status}`);
+    return body;
+  }
+
+  function toast(message) {
+    const el = h('div', { class: 'toast' }, message);
+    document.body.append(el);
+    setTimeout(() => el.remove(), 3500);
+  }
+
+  function logout() {
+    if (token) fetch('/api/admin/logout', { method: 'POST' }).catch(() => {}); // clears the app-preview cookie
+    token = null;
+    try { sessionStorage.removeItem('gameon-admin'); } catch {}
+    renderLogin();
+  }
+
+  // ---------- inputs bound to an object ----------
+  const text = (obj, key, label, attrs = {}) => h('label', {}, label, h('input', { value: obj[key], ...attrs, oninput: (e) => (obj[key] = e.target.value) }));
+  const area = (obj, key, label) => h('label', {}, label, h('textarea', { value: obj[key], oninput: (e) => (obj[key] = e.target.value) }));
+  const num = (obj, key, label, attrs = {}) => h('label', {}, label, h('input', { type: 'number', value: obj[key], ...attrs, oninput: (e) => (obj[key] = e.target.value === '' ? '' : Number(e.target.value)) }));
+  const check = (obj, key, label) => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: obj[key], onchange: (e) => (obj[key] = e.target.checked) }), label);
+  const select = (obj, key, label, options) =>
+    h('label', {}, label, h('select', { onchange: (e) => (obj[key] = e.target.value) }, Object.entries(options).map(([v, t]) => h('option', { value: v, selected: obj[key] === v }, t))));
+  const pad = (n) => String(n).padStart(2, '0');
+  const toLocal = (iso) => { if (!iso) return ''; const d = new Date(iso); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  const when = (obj, key, label) => h('label', {}, label, h('input', { type: 'datetime-local', value: toLocal(obj[key]), oninput: (e) => (obj[key] = e.target.value ? new Date(e.target.value).toISOString() : '') }));
+
+  function saveBar(section, getBody) {
+    const msg = h('span', { class: 'msg' });
+    const btn = h('button', { class: 'primary', onclick: async () => {
+      btn.disabled = true; msg.className = 'msg'; msg.textContent = 'Saving…';
+      try {
+        const res = await api(`/api/admin/${section}`, { method: 'PUT', body: JSON.stringify(getBody()) });
+        content[section] = res[section];
+        msg.className = 'msg ok'; msg.textContent = 'Saved ✓ - live in the app within a minute.';
+        if (section === 'polls') { render(); toast('Polls saved ✓ - live in the app within a minute.'); } // redraw picks up new ids
+        if (section === 'menuOverrides' && menuData) menuData.overrides = res.menuOverrides;
+        if (section === 'home') { render(); toast('Home page saved ✓ - guests see it within a minute.'); } // picks up new card ids
+        if (section === 'maintenance') { render(); toast(res.maintenance.enabled ? 'App is now CLOSED to guests' : 'App is OPEN ✓'); }
+      } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
+      finally { btn.disabled = false; }
+    } }, 'Save changes');
+    return h('div', { class: 'bar' }, btn, msg);
+  }
+
+  // ---------- sections ----------
+  function statusSection() {
+    const m = structuredClone(content.maintenance ?? { enabled: false, message: '' });
+    const choice = h('div', { class: 'row' });
+    const drawChoice = () => choice.replaceChildren(
+      h('button', { class: m.enabled ? 'ghost' : 'primary', onclick: () => { m.enabled = false; drawChoice(); } }, '🟢 Open'),
+      h('button', { class: m.enabled ? 'primary closed' : 'ghost', onclick: () => { m.enabled = true; drawChoice(); } }, '🔴 Closed for maintenance'));
+    drawChoice();
+    return [
+      h('h2', {}, 'App Status'),
+      h('p', { class: 'hint' }, 'Closed = guests see a “Be right back” page instead of the app. You can still use the app while signed in here. Tester logins (SITE_USERS) still apply either way.'),
+      h('div', { class: 'card' }, choice, area(m, 'message', 'Message guests see while closed')),
+      saveBar('maintenance', () => m),
+    ];
+  }
+
+  function hoursSection() {
+    const s = structuredClone(content.settings);
+    const rows = h('div');
+    const drawRows = () => rows.replaceChildren(...s.hours.map((r, i) => h('div', { class: 'row' },
+      text(r, 'days', 'Days', { placeholder: 'Mon–Sat' }), text(r, 'open', 'Opens', { placeholder: '11 AM' }), text(r, 'close', 'Closes', { placeholder: '9:30 PM' }),
+      h('button', { class: 'danger small', onclick: () => { s.hours.splice(i, 1); drawRows(); } }, 'Remove'))));
+    drawRows();
+    s.happyHour.phases ??= [];
+    const dayBoxes = (obj) => DAYS.map((d, i) => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: obj.days.includes(i), onchange: (e) => {
+      obj.days = e.target.checked ? [...obj.days, i] : obj.days.filter((x) => x !== i);
+    } }), d));
+    const timeInput = (obj, key, label) => h('label', {}, label, h('input', { type: 'time', value: obj[key], oninput: (e) => (obj[key] = e.target.value) }));
+
+    // Happy hour tiers, e.g. 3–4 PM: $1 bottles / $2 drafts. Happy hour runs from the first to the last.
+    const phases = h('div');
+    const drawPhases = () => phases.replaceChildren(...s.happyHour.phases.map((p, i) => h('div', { class: 'menu-item' },
+      h('div', { class: 'row' }, h('strong', { style: 'flex:1' }, `Hour ${i + 1}`),
+        h('button', { class: 'danger small', onclick: () => { s.happyHour.phases.splice(i, 1); drawPhases(); } }, 'Remove')),
+      h('div', { class: 'row' }, timeInput(p, 'start', 'From'), timeInput(p, 'end', 'To')),
+      h('div', { class: 'row' }, h('label', {}, 'Deals (one per line)', h('textarea', {
+        value: (p.deals || []).join('\n'), placeholder: '$1 bottles\n$2 drafts',
+        oninput: (e) => (p.deals = e.target.value.split('\n').map((x) => x.trim()).filter(Boolean)),
+      }))))));
+    drawPhases();
+    const addPhase = () => {
+      const last = s.happyHour.phases.at(-1);
+      const start = last?.end ?? '15:00';
+      const [hh, mm] = start.split(':').map(Number);
+      const end = `${String(Math.min(hh + 1, 23)).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+      s.happyHour.phases.push({ start, end, deals: [] });
+      drawPhases();
+    };
+
+    return [
+      h('h2', {}, 'Hours & Happy Hour'),
+      h('p', { class: 'hint' }, 'Shown on the Info tab and the Happy Hour card on Home.'),
+      h('div', { class: 'card' }, h('strong', {}, 'Kitchen hours'), rows,
+        h('button', { class: 'ghost small', onclick: () => { s.hours.push({ days: '', open: '', close: '' }); drawRows(); } }, '+ Add row')),
+      h('div', { class: 'card' }, h('strong', {}, 'Happy hour days'),
+        h('div', { class: 'row', style: 'margin-top:8px' }, dayBoxes(s.happyHour))),
+      h('div', { class: 'card' }, h('strong', {}, 'Happy hour prices by the hour'),
+        h('p', { class: 'hint' }, 'Each hour can have its own deals. The Home card shows the current hour and counts down to the next price change.'),
+        phases,
+        h('button', { class: 'ghost small', onclick: addPhase }, '+ Add hour')),
+      saveBar('settings', () => s),
+    ];
+  }
+
+  function promosSection() {
+    const promos = structuredClone(content.promos ?? []);
+    const list = h('div');
+    const timeInput = (obj, key, label) => h('label', {}, label, h('input', { type: 'time', value: obj[key], oninput: (e) => (obj[key] = e.target.value) }));
+    const draw = () => list.replaceChildren(...promos.map((p, i) => h('div', { class: 'card' },
+      h('div', { class: 'row' }, text(p, 'title', 'Promo', { placeholder: '$7 Burgers', maxlength: 60 })),
+      h('div', { class: 'row' }, h('span', { class: 'muted', style: 'flex:0 0 auto' }, 'Days:'), DAYS.map((d, di) => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: p.days.includes(di), onchange: (e) => {
+        p.days = e.target.checked ? [...p.days, di] : p.days.filter((x) => x !== di);
+      } }), d))),
+      h('div', { class: 'row' }, timeInput(p, 'start', 'Starts'), timeInput(p, 'end', 'Ends')),
+      h('div', { class: 'row' }, text(p, 'description', 'Details', { maxlength: 200, placeholder: 'Any burger, all day' })),
+      h('div', { class: 'row' }, text(p, 'finePrint', 'Fine print', { maxlength: 200, placeholder: 'Dine-in only.' })),
+      h('div', { class: 'row' }, check(p, 'surprise', 'Keep it a surprise until it starts'), h('span', { style: 'flex:1' }),
+        h('button', { class: 'danger small', onclick: () => { if (confirm('Delete this promo?')) { promos.splice(i, 1); draw(); } } }, 'Delete promo')))));
+    draw();
+    return [
+      h('h2', {}, 'Promos'),
+      h('p', { class: 'hint' }, 'Deals with their own days and times, shown in the Promos card on Home. A surprise promo stays hidden (“Surprise promo - unlocks at 6 PM”) until it starts. Guests who turn on alerts get a notification when a promo starts.'),
+      h('button', { class: 'ghost', onclick: () => { promos.unshift({ title: '', days: [1], start: '18:00', end: '19:00', description: '', finePrint: '', surprise: false }); draw(); } }, '+ Add promo'),
+      list,
+      saveBar('promos', () => promos),
+    ];
+  }
+
+  function pollsSection() {
+    const polls = structuredClone(content.polls);
+    const list = h('div');
+    const draw = () => list.replaceChildren(...polls.map((p, i) => {
+      const total = p.options.reduce((n, o) => n + (o.votes || 0), 0);
+      const closed = p.closesAt && Date.parse(p.closesAt) <= Date.now();
+      const opts = h('div');
+      const drawOpts = () => opts.replaceChildren(...p.options.map((o, j) => h('div', { class: 'opt' },
+        h('input', { value: o.emoji, placeholder: '🍔', maxlength: 8, oninput: (e) => (o.emoji = e.target.value) }),
+        h('input', { value: o.label, placeholder: 'Option', maxlength: 60, oninput: (e) => (o.label = e.target.value) }),
+        h('span', { class: 'votes' }, `${o.votes || 0} vote${o.votes === 1 ? '' : 's'}`),
+        h('button', { class: 'danger small', onclick: () => { p.options.splice(j, 1); drawOpts(); } }, '✕'))));
+      drawOpts();
+      return h('div', { class: 'card' },
+        h('div', { class: 'row' }, text(p, 'question', `Question ${closed ? '(closed)' : ''}`, { maxlength: 140 })),
+        h('div', { class: 'row' }, select(p, 'category', 'Category', CATEGORIES), when(p, 'closesAt', 'Voting closes'),
+          check(p, 'featured', 'Featured on Home'), check(p, 'hidden', 'Hide')),
+        h('label', {}, `Options · ${total} total vote${total === 1 ? '' : 's'}`), opts,
+        h('div', { class: 'row', style: 'margin-top:8px' },
+          h('button', { class: 'ghost small', onclick: () => { if (p.options.length < 6) { p.options.push({ emoji: '', label: '', votes: 0 }); drawOpts(); } } }, '+ Option'),
+          h('span', { style: 'flex:1' }),
+          h('button', { class: 'danger small', onclick: () => { if (confirm('Delete this poll and its votes?')) { polls.splice(i, 1); draw(); } } }, 'Delete poll')));
+    }));
+    draw();
+    return [
+      h('h2', {}, 'Polls'),
+      h('p', { class: 'hint' }, 'One vote per phone. Removing an option removes its votes. Polls disappear from the app after they close.'),
+      h('button', { class: 'ghost', onclick: () => {
+        polls.unshift({ category: 'food', question: '', featured: false, hidden: false, closesAt: new Date(Date.now() + 7 * 864e5).toISOString(), options: [{ emoji: '', label: '', votes: 0 }, { emoji: '', label: '', votes: 0 }] });
+        draw();
+      } }, '+ New poll'),
+      list,
+      saveBar('polls', () => polls.map(({ options, ...p }) => ({ ...p, options: options.map(({ votes, ...o }) => o) }))),
+    ];
+  }
+
+  function listSection({ title, hint, section, blank, fields }) {
+    const items = structuredClone(content[section]);
+    const list = h('div');
+    const draw = () => list.replaceChildren(...items.map((it, i) => h('div', { class: 'card' },
+      ...fields(it).map((row) => h('div', { class: 'row' }, row)),
+      h('div', { class: 'row' }, h('span', { style: 'flex:1' }),
+        h('button', { class: 'danger small', onclick: () => { items.splice(i, 1); draw(); } }, 'Delete')))));
+    draw();
+    return [
+      h('h2', {}, title), h('p', { class: 'hint' }, hint),
+      h('button', { class: 'ghost', onclick: () => { items.unshift(blank()); draw(); } }, '+ Add'),
+      list, saveBar(section, () => items),
+    ];
+  }
+
+  const linesInput = (obj, key, label) =>
+    h('label', {}, label, h('textarea', { value: (obj[key] || []).join('\n'), oninput: (e) => (obj[key] = e.target.value.split('\n').map((s) => s.trim()).filter(Boolean)) }));
+  const kickoff = (iso, tba) => {
+    const d = new Date(iso);
+    const day = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'America/New_York' });
+    return tba ? `${day} · time TBA` : `${day} · ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' })}`;
+  };
+
+  function gamedaySection() {
+    const gs = structuredClone(content.gamedaySettings ?? { auto: true, teamSpecials: {} });
+    gs.teamSpecials ??= {};
+    const games = structuredClone(content.gameday);
+    const auto = content.autoGames ?? [];
+
+    const list = h('div');
+    const draw = () => list.replaceChildren(...games.map((g, i) => h('div', { class: 'card' },
+      h('div', { class: 'row' }, select(g, 'team', 'Team', TEAMS), text(g, 'opponent', 'Opponent', { maxlength: 40 }), select(g, 'homeAway', 'Home / Away', { home: 'Home (vs)', away: 'Away (@)' })),
+      h('div', { class: 'row' }, when(g, 'startsAt', 'Kickoff'), text(g, 'broadcast', 'TV channel', { maxlength: 40 })),
+      h('div', { class: 'row' }, linesInput(g, 'specials', 'Specials (one per line)')),
+      h('div', { class: 'row' }, h('span', { style: 'flex:1' }), h('button', { class: 'danger small', onclick: () => { games.splice(i, 1); draw(); } }, 'Delete')))));
+    draw();
+
+    const msg = h('span', { class: 'msg' });
+    const save = h('button', { class: 'primary', onclick: async () => {
+      save.disabled = true; msg.className = 'msg'; msg.textContent = 'Saving…';
+      try {
+        const a = await api('/api/admin/gamedaySettings', { method: 'PUT', body: JSON.stringify(gs) });
+        const b = await api('/api/admin/gameday', { method: 'PUT', body: JSON.stringify(games) });
+        content.gamedaySettings = a.gamedaySettings; content.gameday = b.gameday;
+        msg.className = 'msg ok'; msg.textContent = 'Saved ✓ - live in the app within a minute.';
+      } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
+      finally { save.disabled = false; }
+    } }, 'Save changes');
+
+    return [
+      h('h2', {}, 'Gameday'),
+      h('p', { class: 'hint' }, 'Bengals, Bearcats, Reds and FC Cincinnati schedules update automatically. You set the specials shown with each team’s games.'),
+      h('div', { class: 'card' },
+        check(gs, 'auto', 'Pull schedules automatically'),
+        h('div', { style: 'height:10px' }),
+        ...Object.entries(TEAMS).map(([key, name]) => h('div', { class: 'row' }, linesInput(gs.teamSpecials, key, `${name} specials (one per line)`)))),
+      h('div', { class: 'card' },
+        h('strong', {}, 'Coming up (automatic)'),
+        auto.length
+          ? auto.slice(0, 8).map((g) => h('div', { class: 'muted', style: 'margin-top:6px' }, `${TEAMS[g.team]} ${g.homeAway === 'home' ? 'vs' : '@'} ${g.opponent} — ${kickoff(g.startsAt, g.timeTBA)}${g.broadcast ? ` · ${g.broadcast}` : ''}`))
+          : h('div', { class: 'muted', style: 'margin-top:6px' }, 'No upcoming games found right now.')),
+      h('h2', {}, 'Extra games & watch parties'),
+      h('p', { class: 'hint' }, 'Optional. Add anything the schedule doesn’t cover. A game you add for the same team and time replaces the automatic one.'),
+      h('button', { class: 'ghost', onclick: () => { games.unshift({ team: 'bengals', opponent: '', homeAway: 'home', startsAt: '', broadcast: '', specials: [] }); draw(); } }, '+ Add game'),
+      list,
+      h('div', { class: 'bar' }, save, msg),
+    ];
+  }
+
+  const comingSoonSection = () => listSection({
+    title: 'Coming Soon', section: 'comingSoon', hint: 'Shown on the Menu → Coming Soon tab.',
+    blank: () => ({ kind: 'food', title: '', description: '', eta: '', fromPoll: false }),
+    fields: (c) => [
+      [select(c, 'kind', 'Type', { food: 'Food', drink: 'Drink' }), text(c, 'title', 'Name', { maxlength: 60 }), text(c, 'eta', 'When', { placeholder: 'Mid-October', maxlength: 40 })],
+      [area(c, 'description', 'Description')],
+      [check(c, 'fromPoll', 'Fan Pick (won a poll)')],
+    ],
+  });
+
+  const showcaseSection = () => listSection({
+    title: 'We Made It Happen', section: 'showcase', hint: 'Poll winners that became real - shown on the Polls tab.',
+    blank: () => ({ title: '', description: '', pollQuestion: '', winningShare: 50, launchedOn: new Date().toISOString().slice(0, 10), status: 'on-menu' }),
+    fields: (s) => [
+      [text(s, 'title', 'What we made', { maxlength: 60 }), select(s, 'status', 'Status', STATUS)],
+      [text(s, 'pollQuestion', 'The poll question', { maxlength: 140 }), num(s, 'winningShare', 'Won with (%)', { min: 0, max: 100 }),
+        h('label', {}, 'Date', h('input', { type: 'date', value: s.launchedOn, oninput: (e) => (s.launchedOn = e.target.value) }))],
+      [area(s, 'description', 'Description')],
+    ],
+  });
+
+  // ---------- Home Page (layout + live preview) ----------
+  // The preview is the real app in a frame at /?homePreview=1. Your unsaved layout is sent to it as
+  // you edit; guests only see changes after "Save changes".
+  let previewSender = null;
+  let previewFit = null;
+  window.addEventListener('resize', () => previewFit?.());
+  window.addEventListener('message', (e) => {
+    if (e.origin === location.origin && e.data?.type === 'gameon:preview-ready' && previewSender) previewSender();
+  });
+
+  const BLOCK_NAMES = { header: 'Logo', happyHour: 'Happy Hour', promos: 'Promos', gameday: 'Gameday', quickActions: 'Quick buttons', poll: 'Poll', message: 'Message card' };
+  const BUTTON_NAMES = { order: 'Order Online', taps: 'View Tap List', checkin: 'Check In', poll: 'Today’s Poll' };
+
+  function homeSection() {
+    const home = structuredClone(content.home ?? { blocks: [] });
+    let device = 'phone';
+
+    // ----- preview -----
+    const frame = h('iframe', { src: '/?homePreview=1', title: 'Home page preview', class: 'preview-frame' });
+    const frameBox = h('div', { class: 'preview-box' }, frame);
+    const send = () => frame.contentWindow?.postMessage({ type: 'gameon:home-preview', home }, location.origin);
+    previewSender = send;
+    let timer;
+    const schedule = () => { clearTimeout(timer); timer = setTimeout(send, 250); };
+    frame.addEventListener('load', () => setTimeout(send, 300));
+    const fit = () => {
+      const size = device === 'phone' ? { w: 390, h: 760 } : { w: 1280, h: 820 };
+      frameBox.style.maxWidth = device === 'phone' ? '390px' : '100%'; // set first, then measure
+      const scale = Math.min(1, (frameBox.clientWidth || size.w) / size.w);
+      frame.style.width = `${size.w}px`;
+      frame.style.height = `${size.h}px`;
+      frame.style.transform = `scale(${scale})`;
+      frameBox.style.height = `${Math.round(size.h * scale)}px`;
+    };
+    const deviceBtn = (key, label) => h('button', { class: `small ${device === key ? 'primary' : 'ghost'}`, onclick: () => { device = key; drawDeviceButtons(); fit(); } }, label);
+    const deviceRow = h('div', { class: 'row' });
+    const drawDeviceButtons = () => deviceRow.replaceChildren(deviceBtn('phone', '📱 Phone'), deviceBtn('web', '🖥️ Website'), h('span', { class: 'muted', style: 'flex:1;text-align:right' }, 'Preview - not saved yet'));
+    drawDeviceButtons();
+    previewFit = fit;
+    setTimeout(fit, 0); // once the tab is on screen and has a width
+
+    // ----- editor -----
+    const list = h('div');
+    const move = (i, d) => { const j = i + d; if (j < 0 || j >= home.blocks.length) return; [home.blocks[i], home.blocks[j]] = [home.blocks[j], home.blocks[i]]; draw(); schedule(); };
+    const field = (obj, key, label, attrs = {}) => h('label', {}, label, h('input', { value: obj[key] ?? '', ...attrs, oninput: (e) => { obj[key] = e.target.value; schedule(); } }));
+
+    function blockCard(b, i) {
+      const head = h('div', { class: 'row', style: 'align-items:center' },
+        h('strong', { style: 'flex:1;font-size:16px' }, `${i + 1}. ${BLOCK_NAMES[b.type] ?? b.type}${b.type === 'message' && b.title ? ` - ${b.title}` : ''}`),
+        h('button', { class: 'ghost small', disabled: i === 0, 'aria-label': 'Move up', onclick: () => move(i, -1) }, '↑'),
+        h('button', { class: 'ghost small', disabled: i === home.blocks.length - 1, 'aria-label': 'Move down', onclick: () => move(i, 1) }, '↓'),
+        h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: b.visible, onchange: (e) => { b.visible = e.target.checked; draw(); schedule(); } }), 'Show'));
+      const body = [];
+      if (b.type === 'happyHour') body.push(h('div', { class: 'row' }, field(b, 'title', 'Card title', { maxlength: 30 })), h('p', { class: 'hint' }, 'Prices by the hour are set in the Hours & Happy Hour tab.'));
+      if (b.type === 'promos') body.push(h('div', { class: 'row' }, field(b, 'title', 'Card title', { maxlength: 30 })), h('p', { class: 'hint' }, 'Today’s promos (set them in the Promos tab). Hidden when there are no promos at all.'));
+      if (b.type === 'poll') body.push(h('div', { class: 'row' }, field(b, 'title', 'Heading', { maxlength: 40 })), h('p', { class: 'hint' }, 'Shows your featured poll (pick it in the Polls tab).'));
+      if (b.type === 'header') body.push(h('p', { class: 'hint' }, 'The yellow Game On logo card.'));
+      if (b.type === 'gameday') body.push(h('p', { class: 'hint' }, 'Upcoming games & specials (edit specials in the Gameday tab).'));
+      if (b.type === 'quickActions') {
+        body.push(...b.buttons.map((btn) => h('div', { class: 'row' },
+          h('label', {}, BUTTON_NAMES[btn.key], h('input', { value: btn.label, maxlength: 24, oninput: (e) => { btn.label = e.target.value; schedule(); } })),
+          h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: btn.visible, onchange: (e) => { btn.visible = e.target.checked; schedule(); } }), 'Show'))));
+      }
+      if (b.type === 'message') {
+        body.push(
+          h('div', { class: 'row' }, field(b, 'title', 'Title', { maxlength: 60, placeholder: 'Monday Special' }),
+            h('label', {}, 'Color', h('select', { onchange: (e) => { b.style = e.target.value; schedule(); } },
+              h('option', { value: 'yellow', selected: b.style !== 'dark' }, 'Yellow'), h('option', { value: 'dark', selected: b.style === 'dark' }, 'Dark')))),
+          h('div', { class: 'row' }, h('label', {}, 'Message', h('textarea', { value: b.text ?? '', maxlength: 300, placeholder: '$7 burgers all day!', oninput: (e) => { b.text = e.target.value; schedule(); } }))),
+          h('div', { class: 'row' }, h('span', { style: 'flex:1' }), h('button', { class: 'danger small', onclick: () => { home.blocks.splice(i, 1); draw(); schedule(); } }, 'Delete card')));
+      }
+      return h('div', { class: `card${b.visible ? '' : ' hidden-item'}` }, head, ...body);
+    }
+
+    function draw() { list.replaceChildren(...home.blocks.map(blockCard)); }
+    draw();
+
+    const addMessage = h('button', { class: 'ghost', onclick: () => {
+      const at = home.blocks.findIndex((b) => b.type === 'header') + 1; // right under the logo
+      home.blocks.splice(at, 0, { id: '', type: 'message', visible: true, title: '', text: '', style: 'yellow' });
+      draw(); schedule();
+    } }, '+ Add message card');
+
+    return [
+      h('h2', {}, 'Home Page'),
+      h('p', { class: 'hint' }, 'Reorder with ↑ ↓, hide anything, change labels, or add message cards. Check the preview, then Save.'),
+      h('div', { class: 'home-grid' },
+        h('div', {}, addMessage, list),
+        h('div', { class: 'preview-col' }, h('div', { class: 'card' }, deviceRow, frameBox))),
+      saveBar('home', () => home),
+    ];
+  }
+
+  // ---------- Check-ins ----------
+  function checkinsSection() {
+    const wrap = h('div', {}, h('p', { class: 'muted' }, 'Loading…'));
+    (async () => {
+      try {
+        const data = await api('/api/admin/checkins');
+        const s = structuredClone(data.settings);
+        const latIn = h('input', { type: 'number', step: 'any', value: s.location.lat, oninput: (e) => (s.location.lat = Number(e.target.value)) });
+        const lngIn = h('input', { type: 'number', step: 'any', value: s.location.lng, oninput: (e) => (s.location.lng = Number(e.target.value)) });
+        const locMsg = h('span', { class: 'msg' });
+        const useHere = h('button', { class: 'ghost small', onclick: () => {
+          if (!navigator.geolocation) { locMsg.className = 'msg err'; locMsg.textContent = 'This browser can’t share location.'; return; }
+          locMsg.className = 'msg'; locMsg.textContent = 'Finding you…';
+          navigator.geolocation.getCurrentPosition((p) => {
+            s.location.lat = Number(p.coords.latitude.toFixed(6));
+            s.location.lng = Number(p.coords.longitude.toFixed(6));
+            latIn.value = s.location.lat; lngIn.value = s.location.lng;
+            locMsg.className = 'msg ok'; locMsg.textContent = `Got it (±${Math.round(p.coords.accuracy)} m). Tap Save changes.`;
+          }, (err) => { locMsg.className = 'msg err'; locMsg.textContent = err.code === 1 ? 'Location is blocked for this site in your browser settings.' : 'Couldn’t get your location - try again.'; },
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+        } }, '📍 Use my current location');
+        const feet = (m) => Math.round(m * 3.281);
+        const radiusHint = h('span', { class: 'muted' }, `≈ ${feet(s.radiusMeters)} ft`);
+        const mapLink = () => `https://www.google.com/maps?q=${s.location.lat},${s.location.lng}`;
+
+        wrap.replaceChildren(
+          h('div', { class: 'card' },
+            h('strong', {}, `Today: ${data.stats.today} check-in${data.stats.today === 1 ? '' : 's'}`),
+            h('div', { class: 'muted', style: 'margin-top:4px' }, `${data.stats.uniqueGuests} different phones have checked in so far.`),
+            data.stats.days.length
+              ? h('div', { style: 'margin-top:10px' }, data.stats.days.map((d) => h('div', { class: 'row', style: 'margin-bottom:2px' },
+                h('span', { style: 'flex:1' }, new Date(`${d.date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })),
+                h('strong', {}, String(d.count)))))
+              : h('div', { class: 'muted', style: 'margin-top:8px' }, 'No check-ins yet.')),
+          h('div', { class: 'card' },
+            check(s, 'enabled', 'Check-ins turned on'),
+            h('div', { class: 'row', style: 'margin-top:10px' },
+              h('label', {}, 'How close guests must be (meters)', h('input', { type: 'number', min: 25, max: 2000, value: s.radiusMeters, oninput: (e) => { s.radiusMeters = Number(e.target.value); radiusHint.textContent = `≈ ${feet(s.radiusMeters)} ft`; } })),
+              radiusHint),
+            h('strong', { style: 'display:block;margin-top:8px' }, 'Bar location'),
+            h('p', { class: 'hint' }, 'Stand inside the bar and tap “Use my current location” for the most accurate check-ins.'),
+            h('div', { class: 'row' }, h('label', {}, 'Latitude', latIn), h('label', {}, 'Longitude', lngIn)),
+            h('div', { class: 'row' }, useHere, locMsg),
+            h('a', { href: '#', style: 'color:var(--brand);font-size:13px', onclick: (e) => { e.preventDefault(); window.open(mapLink(), '_blank', 'noopener'); } }, 'Check this spot on a map ↗')),
+          saveBar('checkinSettings', () => s),
+        );
+      } catch (e) { wrap.replaceChildren(h('p', { class: 'msg err' }, e.message)); }
+    })();
+    return [
+      h('h2', {}, 'Check-ins'),
+      h('p', { class: 'hint' }, 'Guests tap “Check in” on the Rewards tab when they’re at the bar - once per day, per phone. Points come later; for now it counts visits.'),
+      wrap,
+    ];
+  }
+
+  // ---------- Menu (edits on top of the live Toast menu) ----------
+  let menuData = null; // { sections, items, overrides } from /api/admin/menu
+
+  function menuSection() {
+    const wrap = h('div', {}, h('p', { class: 'muted' }, 'Loading your Toast menu…'));
+    (async () => {
+      try {
+        menuData ??= await api('/api/admin/menu');
+        drawMenuEditor(wrap);
+      } catch (e) { wrap.replaceChildren(h('p', { class: 'msg err' }, e.message)); }
+    })();
+    return [
+      h('h2', {}, 'Menu'),
+      h('p', { class: 'hint' }, 'Your Toast menu as guests see it in the app. Rename items, change descriptions, or hide items and whole sections. Prices and sold-out status still come from Toast automatically.'),
+      wrap,
+    ];
+  }
+
+  function drawMenuEditor(wrap) {
+    const ov = structuredClone(menuData.overrides ?? {});
+    ov.items ??= {};
+    ov.hiddenSections ??= [];
+    let only = 'all';
+    let query = '';
+    const money = (n) => `$${Number(n).toFixed(2)}`;
+    const priceText = (i) => (i.sizes?.length ? i.sizes.map((s) => `${s.label} ${money(s.price)}`).join(' · ') : typeof i.price === 'number' ? money(i.price) : '');
+    const list = h('div');
+
+    function itemEditor(i) {
+      const e = ov.items[i.key] ?? {};
+      const set = (patch) => { ov.items[i.key] = { ...(ov.items[i.key] ?? {}), ...patch }; };
+      const edited = Boolean(e.name || e.description || e.hidden || e.noDescription);
+      const descValue = e.noDescription ? '' : e.description ?? i.description ?? '';
+      return h('div', { class: `menu-item${e.hidden ? ' hidden-item' : ''}` },
+        h('div', { class: 'row', style: 'margin-bottom:2px' },
+          h('strong', { style: 'flex:1' }, i.name, i.soldOut ? ' · sold out' : '', edited ? h('span', { class: 'edited' }, ' edited') : ''),
+          h('span', { class: 'muted' }, priceText(i))),
+        h('div', { class: 'row' }, h('label', {}, 'Name in the app', h('input', { value: e.name ?? '', placeholder: i.name, maxlength: 80, oninput: (ev) => set({ name: ev.target.value }) }))),
+        h('div', { class: 'row' }, h('label', {}, 'Description (clear it to show none)', h('textarea', {
+          value: descValue, placeholder: 'No description - type one here', maxlength: 600,
+          oninput: (ev) => {
+            const v = ev.target.value;
+            set(v.trim() ? { description: v, noDescription: false } : { description: '', noDescription: Boolean(i.description) });
+          },
+        }))),
+        h('div', { class: 'row' },
+          h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: e.hidden, onchange: (ev) => { set({ hidden: ev.target.checked }); draw(); } }), 'Hide this item'),
+          h('span', { style: 'flex:1' }),
+          edited ? h('button', { class: 'ghost small', onclick: () => { delete ov.items[i.key]; draw(); } }, 'Reset to Toast') : ''));
+    }
+
+    function draw() {
+      const q = query.trim().toLowerCase();
+      list.replaceChildren(...menuData.sections
+        .filter((s) => only === 'all' || s.id === only)
+        .map((s) => {
+          const items = menuData.items.filter((i) => i.sectionId === s.id && (!q || i.name.toLowerCase().includes(q)));
+          if (items.length === 0) return null;
+          const hidden = ov.hiddenSections.includes(s.id);
+          return h('div', { class: 'card' },
+            h('div', { class: 'row' },
+              h('strong', { style: 'flex:1;font-size:18px' }, s.title),
+              h('span', { class: 'muted' }, s.tab),
+              h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: hidden, onchange: (ev) => {
+                ov.hiddenSections = ev.target.checked ? [...ov.hiddenSections, s.id] : ov.hiddenSections.filter((x) => x !== s.id);
+                draw();
+              } }), 'Hide whole section')),
+            hidden ? h('p', { class: 'muted' }, 'This whole section is hidden from the app.') : items.map(itemEditor));
+        })
+        .filter(Boolean));
+      if (!list.children.length) list.append(h('p', { class: 'muted' }, 'No items match.'));
+    }
+
+    draw();
+    wrap.replaceChildren(
+      menuData.stale ? h('div', { class: 'banner' }, 'Toast didn’t answer just now - showing the last menu we got.') : '',
+      h('div', { class: 'row' },
+        h('label', {}, 'Section', h('select', { onchange: (ev) => { only = ev.target.value; draw(); } },
+          h('option', { value: 'all' }, 'All sections'),
+          menuData.sections.filter((s) => menuData.items.some((i) => i.sectionId === s.id)).map((s) => h('option', { value: s.id }, `${s.tab} · ${s.title}`)))),
+        h('label', {}, 'Search', h('input', { placeholder: 'e.g. Miller Lite', oninput: (ev) => { query = ev.target.value; draw(); } }))),
+      list,
+      saveBar('menuOverrides', () => ov),
+    );
+  }
+
+  // ---------- 💡 Quick Lunch demo (admin-only, fully simulated, nothing is saved) ----------
+  // A presentation of the idea: a lunch card (11:30–1:30) with "Order lunch ahead" that switches
+  // off when tables are full (auto from Toast open checks, or a manual switch), plus Toast's
+  // kitchen-capacity throttling. Everything here is pretend data in this browser tab.
+  const lunchDemo = {
+    minutes: 12 * 60 + 5,
+    tables: [1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1].map(Boolean), // true = seated (open check)
+    minFree: 2,
+    manualFull: false,
+    ordersLast15: 4,
+    capacity: 8, // Toast kitchen capacity: orders per 15 minutes
+    start: '11:30',
+    end: '13:30',
+    headline: 'Quick Lunch: in & out on your break',
+    message: 'Order ahead and it’s ready when you walk in. Grab a table and get back on time.',
+    picks: 'Crispy Chicken Bacon Ranch Wrap | 13\nBuild Your Own Burger | 12\nChicken Tenders | 10.50\nPhilly Wrap | 12',
+  };
+
+  const LUNCH_SCENES = {
+    'Before lunch': { minutes: 11 * 60, seated: 3, orders: 0, manualFull: false },
+    'Quiet lunch': { minutes: 12 * 60 + 20, seated: 6, orders: 3, manualFull: false },
+    'Lunch rush': { minutes: 12 * 60 + 10, seated: 11, orders: 11, manualFull: false },
+    'After lunch': { minutes: 13 * 60 + 45, seated: 4, orders: 1, manualFull: false },
+  };
+
+  function lunchDemoSection() {
+    const d = lunchDemo;
+    const toMin = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+    const fmt = (m) => { const h24 = Math.floor(m / 60), mm = m % 60, h = h24 % 12 || 12; return `${h}:${String(mm).padStart(2, '0')} ${h24 >= 12 ? 'PM' : 'AM'}`; };
+    const fmtT = (t) => fmt(toMin(t));
+    const picks = () => d.picks.split('\n').map((l) => l.split('|').map((x) => x.trim())).filter(([n]) => n);
+
+    // Status line + phone get redrawn on every change.
+    const statusBox = h('div');
+    const phoneBox = h('div');
+    const tablesBox = h('div', { class: 'tables-grid' });
+    const clockLabel = h('strong', {});
+    const clock = h('input', { type: 'range', min: 630, max: 870, step: 5, value: d.minutes, oninput: (e) => { d.minutes = Number(e.target.value); update(); } });
+    const ordersLabel = h('strong', {});
+    const orders = h('input', { type: 'range', min: 0, max: 16, step: 1, value: d.ordersLast15, oninput: (e) => { d.ordersLast15 = Number(e.target.value); update(); } });
+
+    function state() {
+      const free = d.tables.filter((t) => !t).length;
+      const inWindow = d.minutes >= toMin(d.start) && d.minutes < toMin(d.end);
+      const before = d.minutes < toMin(d.start);
+      const autoFull = free < d.minFree;
+      const full = d.manualFull || autoFull;
+      const readyIn = 15 + Math.floor(d.ordersLast15 / d.capacity) * 15; // Toast pushes quotes back per 15-min block
+      return { free, inWindow, before, autoFull, full, readyIn };
+    }
+
+    function drawTables() {
+      tablesBox.replaceChildren(...d.tables.map((busy, i) => h('button', {
+        class: `tbl${busy ? ' busy' : ''}`,
+        onclick: () => { d.tables[i] = !d.tables[i]; update(); },
+        'aria-label': `Table ${i + 1} ${busy ? 'seated' : 'open'}`,
+      }, `T${i + 1}`, h('small', {}, busy ? 'Seated' : 'Open'))));
+    }
+
+    function drawStatus() {
+      const s = state();
+      clockLabel.textContent = fmt(d.minutes);
+      ordersLabel.textContent = `${d.ordersLast15} orders`;
+      let line, go;
+      if (!s.inWindow) { line = s.before ? `Before ${fmtT(d.start)}: the card shows a “starts at” teaser - ordering isn’t open yet.` : `After ${fmtT(d.end)}: the Quick Lunch card is hidden.`; go = false; }
+      else if (d.manualFull) { line = 'Staff flipped “Lunch is full” → order button hidden for everyone.'; go = false; }
+      else if (s.autoFull) { line = `Only ${s.free} table${s.free === 1 ? '' : 's'} free (minimum ${d.minFree}) → order button hidden automatically.`; go = false; }
+      else { line = `${s.free} tables free (minimum ${d.minFree}) → guests can order ahead. Toast quotes ready in ~${s.readyIn} min.`; go = true; }
+      statusBox.replaceChildren(h('div', { class: `status-line ${go ? 'go' : 'stop'}` }, line));
+    }
+
+    function drawPhone() {
+      const s = state();
+      const pickRows = h('div', { class: 'ph-picks' }, picks().map(([name, price]) => h('div', { class: 'ph-pick' }, h('span', {}, name), h('span', {}, price ? `$${Number(price).toFixed(2)}` : ''))));
+      let card;
+      if (!s.inWindow && !s.before) {
+        card = h('div', { class: 'ph-ghost' }, `(Quick Lunch card is hidden after ${fmtT(d.end)} - it comes back tomorrow at ${fmtT(d.start)})`);
+      } else {
+        const pill = s.before ? h('span', { class: 'pill soon' }, `STARTS ${fmtT(d.start)}`) : s.full ? h('span', { class: 'pill full' }, 'FULL RIGHT NOW') : h('span', { class: 'pill open' }, `OPEN · UNTIL ${fmtT(d.end)}`);
+        const action = s.before
+          ? h('button', { class: 'ph-btn alt', disabled: true }, `Lunch ordering opens at ${fmtT(d.start)}`)
+          : s.full
+            ? h('div', { class: 'ph-full' }, h('strong', {}, 'We’re packed right now 🍻'), h('div', { style: 'margin-top:4px' }, 'Walk-ins welcome at the bar - or check back in a few minutes.'))
+            : [
+              h('button', { class: 'ph-btn', onclick: () => toast('Demo: this would open your Toast ordering page') }, `Order lunch ahead · ready in ~${s.readyIn} min`),
+              h('button', { class: 'ph-btn alt', onclick: () => toast('Demo: needs Toast Order & Pay (table QR codes)') }, 'Order from your table (with Toast Order & Pay)'),
+            ];
+        card = h('div', { class: `ph-card${s.inWindow && !s.full ? ' live' : ''}` },
+          h('div', { class: 'ph-label' }, h('span', {}, '🥪 Quick Lunch'), pill),
+          h('div', { class: 'ph-headline' }, d.headline),
+          h('div', { class: 'ph-msg' }, d.message),
+          s.inWindow && !s.full ? h('div', { class: 'ph-msg', style: 'color:#bbf7d0' }, `${s.free} tables open now`) : '',
+          pickRows,
+          action);
+      }
+      phoneBox.replaceChildren(
+        h('div', { class: 'phone' }, h('div', { class: 'notch' }),
+          h('div', { class: 'ph-logo' }, 'GAME ON', h('small', {}, 'WESTSIDE. STRONGSIDE.')),
+          card,
+          h('div', { class: 'ph-next' }, '… rest of Home (Happy Hour, Promos, Gameday, polls) …')),
+        h('div', { class: 'why' }, `Guest’s view at ${fmt(d.minutes)} - simulated`));
+    }
+
+    function update() { drawTables(); drawStatus(); drawPhone(); }
+
+    function scene(name) {
+      const sc = LUNCH_SCENES[name];
+      d.minutes = sc.minutes; d.ordersLast15 = sc.orders; d.manualFull = sc.manualFull;
+      const order = [0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11];
+      d.tables = d.tables.map(() => false);
+      order.slice(0, sc.seated).forEach((i) => (d.tables[i] = true));
+      clock.value = d.minutes; orders.value = d.ordersLast15; manual.checked = d.manualFull;
+      update();
+    }
+
+    const manual = h('input', { type: 'checkbox', checked: d.manualFull, onchange: (e) => { d.manualFull = e.target.checked; update(); } });
+    const bind = (key, label, attrs = {}, area = false) => h('label', {}, label, h(area ? 'textarea' : 'input', { value: d[key], ...attrs, oninput: (e) => { d[key] = e.target.value; update(); } }));
+
+    update();
+    return [
+      h('h2', {}, '💡 Quick Lunch - Demo'),
+      h('div', { class: 'demo-banner' }, 'Demo only - pretend data in this tab. Nothing is saved and guests don’t see any of this. Use it to show how the idea would work.'),
+      h('div', { class: 'scene-row' }, h('span', { class: 'muted', style: 'align-self:center' }, 'Jump to:'), Object.keys(LUNCH_SCENES).map((n) => h('button', { class: 'ghost small', onclick: () => scene(n) }, n))),
+      h('div', { class: 'home-grid' },
+        h('div', {},
+          h('div', { class: 'card' },
+            h('div', { class: 'row' }, h('span', { style: 'flex:1' }, '🕐 Time of day'), clockLabel),
+            clock,
+            statusBox),
+          h('div', { class: 'card' },
+            h('div', { class: 'row' }, h('strong', { style: 'flex:1' }, '🍽️ Floor plan (from Toast open checks)'), h('span', { class: 'muted' }, 'tap to seat / clear')),
+            tablesBox,
+            h('div', { class: 'row', style: 'margin-top:10px' },
+              h('label', {}, 'Hide ordering when free tables drop below', h('input', { type: 'number', min: 0, max: 12, value: d.minFree, oninput: (e) => { d.minFree = Number(e.target.value) || 0; update(); } })),
+              h('button', { class: 'ghost small', onclick: () => { d.tables = d.tables.map(() => true); update(); } }, 'Seat all'),
+              h('button', { class: 'ghost small', onclick: () => { d.tables = d.tables.map(() => false); update(); } }, 'Clear all')),
+            h('label', { class: 'check', style: 'margin-top:6px' }, manual, 'Staff switch: “Lunch is full” (overrides everything)')),
+          h('div', { class: 'card' },
+            h('div', { class: 'row' }, h('strong', { style: 'flex:1' }, '👨‍🍳 Toast kitchen limit'), ordersLabel),
+            h('p', { class: 'hint' }, `Orders in the last 15 minutes (limit ${d.capacity} per 15 min). Over the limit, Toast pushes the ready time back instead of overloading the kitchen.`),
+            orders),
+          h('div', { class: 'card' },
+            h('strong', {}, '✏️ What the owner would edit'),
+            h('div', { class: 'row', style: 'margin-top:8px' },
+              h('label', {}, 'Starts', h('input', { type: 'time', value: d.start, oninput: (e) => { d.start = e.target.value || d.start; update(); } })),
+              h('label', {}, 'Ends', h('input', { type: 'time', value: d.end, oninput: (e) => { d.end = e.target.value || d.end; update(); } }))),
+            h('div', { class: 'row' }, bind('headline', 'Headline', { maxlength: 60 })),
+            h('div', { class: 'row' }, bind('message', 'Message', { maxlength: 160 }, true)),
+            h('div', { class: 'row' }, bind('picks', 'Lunch picks (Name | price, one per line)', {}, true)))),
+        h('div', { class: 'preview-col' }, phoneBox)),
+      h('div', { class: 'card how' },
+        h('strong', {}, 'How it would work for real'),
+        h('ul', {},
+          h('li', {}, 'Lunch card shows Mon–Fri during the lunch window. ', h('span', {}, 'Times, message and picks are edited in this admin.')),
+          h('li', {}, 'Every minute the app counts tables with an open check in Toast. ', h('span', {}, 'Needs servers to ring checks on tables (floor plan) and Toast API access to orders + tables.')),
+          h('li', {}, 'Below the minimum free tables, the order button hides automatically. ', h('span', {}, 'Staff can also flip “Lunch is full” from a phone at any time.')),
+          h('li', {}, 'Toast kitchen-capacity throttling protects the kitchen. ', h('span', {}, 'Set in Toast: X orders per 15 min - even orders placed straight on the Toast page are covered.')),
+          h('li', {}, 'Optional: Toast scheduled orders (pick a ready time) and Toast Order & Pay (order from the table by QR code). ', h('span', {}, 'Both are switched on in Toast.')))),
+    ];
+  }
+
+  const TABS = { status: ['App Status', statusSection], home: ['Home Page', homeSection], menu: ['Menu', menuSection], checkins: ['Check-ins', checkinsSection], hours: ['Hours & Happy Hour', hoursSection], promos: ['Promos', promosSection], polls: ['Polls', pollsSection], gameday: ['Gameday', gamedaySection], soon: ['Coming Soon', comingSoonSection], showcase: ['We Made It', showcaseSection], lunchDemo: ['💡 Quick Lunch Demo', lunchDemoSection] };
+
+  function render() {
+    headerRight.replaceChildren(h('button', { class: 'small', onclick: logout }, 'Sign out'));
+    app.replaceChildren(
+      content.maintenance?.enabled ? h('div', { class: 'banner closed' }, '🔴 The app is CLOSED to guests. Switch it back on in App Status.') : '',
+      content.storageIsPersistent ? '' : h('div', { class: 'banner' }, '⚠️ No storage disk attached in Railway - changes will be lost on the next deploy. Add a Volume to this service (see README).'),
+      h('nav', {}, Object.entries(TABS).map(([k, [label]]) => h('button', { class: k === tab ? 'active' : '', onclick: () => { tab = k; render(); } }, label))),
+      ...TABS[tab][1](),
+    );
+  }
+
+  async function loadAndRender() {
+    app.replaceChildren(h('p', { class: 'muted' }, 'Loading…'));
+    try { content = await api('/api/admin/content'); render(); }
+    catch (e) { if (token) app.replaceChildren(h('p', { class: 'msg err' }, e.message)); }
+  }
+
+  function renderLogin() {
+    headerRight.replaceChildren();
+    const msg = h('p', { class: 'msg err' });
+    const pw = h('input', { type: 'password', autocomplete: 'current-password', placeholder: 'Admin password' });
+    const form = h('form', { class: 'card login', onsubmit: async (e) => {
+      e.preventDefault(); msg.textContent = '';
+      try {
+        const res = await api('/api/admin/login', { method: 'POST', body: JSON.stringify({ password: pw.value }) });
+        token = res.token;
+        try { sessionStorage.setItem('gameon-admin', token); } catch {}
+        loadAndRender();
+      } catch (err) { msg.textContent = err.message; }
+    } }, h('h2', {}, 'Sign in'), h('p', { class: 'hint' }, 'Staff only.'), pw, h('div', { style: 'height:10px' }), h('button', { class: 'primary', type: 'submit' }, 'Sign in'), msg);
+    app.replaceChildren(form);
+    pw.focus();
+  }
+
+  token ? loadAndRender() : renderLogin();
+})();
+</script>
+</body>
+</html>
