@@ -18,7 +18,7 @@ import { adminEnabled, checkPassword, issueToken, loginAllowed, recordFailure, v
 import { checkinStats, evaluateCheckin, recordCheckin } from './checkins.mjs';
 import { validateHome } from './home.mjs';
 import { promoSchedule, todaysPromos, validatePhases, validatePromos } from './promos.mjs';
-import { MENU_SECTION_IDS, MENU_SECTIONS, withBase } from './menuOverrides.mjs';
+import { BAR_SECTION_IDS, MENU_SECTION_IDS, MENU_SECTIONS, sectionOfKey, withBase } from './menuOverrides.mjs';
 import { upcomingAutoGames } from './schedule.mjs';
 import { getCachedMenu, ToastConfigError } from './toastMenu.mjs';
 import { getContent, storageIsPersistent, update } from './store.mjs';
@@ -97,6 +97,18 @@ const validators = {
   home: (v) => validateHome(v, fail),
 
   menuOverrides(v) {
+    // Bar 21+ sub-categories, each inside one section (On Tap → Domestics, IPAs), in display order.
+    const seenNames = new Set();
+    const barGroups = list(v?.barGroups ?? [], 'Sub-categories', 40).map((g, i) => {
+      const parent = BAR_SECTION_IDS.includes(g?.parent) ? g.parent : fail(`Sub-category ${i + 1} needs a section`);
+      const section = MENU_SECTIONS.find((s) => s.id === parent).title;
+      const name = str(g?.name, `A ${section} sub-category name`, 30);
+      const dupKey = `${parent}|${name.toLowerCase()}`;
+      if (seenNames.has(dupKey)) fail(`${section} has two sub-categories called “${name}”`);
+      seenNames.add(dupKey);
+      return { id: typeof g?.id === 'string' && /^g-[\w-]{4,40}$/.test(g.id) ? g.id : `g-${newId()}`, name, parent };
+    });
+    const parentOf = new Map(barGroups.map((g) => [g.id, g.parent]));
     const entries = Object.entries(v?.items ?? {});
     if (entries.length > 1000) fail('Too many menu edits');
     const items = {};
@@ -106,13 +118,15 @@ const validators = {
       const description = str(o?.description, 'Description', 600, { required: false });
       const hidden = Boolean(o?.hidden);
       const noDescription = Boolean(o?.noDescription);
+      // Only a sub-category of the drink's own section (a bottle can't go under On Tap).
+      const group = typeof o?.group === 'string' && parentOf.get(o.group) === sectionOfKey(key) ? o.group : '';
       // Only keep items that actually have an edit.
-      if (name || description || hidden || noDescription) {
-        items[key] = { ...(name && { name }), ...(description && { description }), ...(hidden && { hidden }), ...(noDescription && { noDescription }) };
+      if (name || description || hidden || noDescription || group) {
+        items[key] = { ...(name && { name }), ...(description && { description }), ...(hidden && { hidden }), ...(noDescription && { noDescription }), ...(group && { group }) };
       }
     }
     const hiddenSections = [...new Set(list(v?.hiddenSections ?? [], 'Hidden sections', 50).filter((s) => MENU_SECTION_IDS.includes(s)))];
-    return { items, hiddenSections };
+    return { items, hiddenSections, barGroups, hideBarPrices: Boolean(v?.hideBarPrices) };
   },
 
   maintenance(v) {

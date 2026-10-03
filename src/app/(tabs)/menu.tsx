@@ -8,7 +8,7 @@ import { WING_SAUCES } from '@/data/menuDescriptions';
 import { useAsync } from '@/hooks/useAsync';
 import { menuService } from '@/services/menu';
 import { openOnlineOrdering } from '@/services/ordering';
-import type { ComingSoonItem, MenuItem, MenuSection, MenuSectionId } from '@/types';
+import type { ComingSoonItem, MenuItem, MenuSection, MenuSectionId, MenuSubgroup } from '@/types';
 
 const money = (n: number) => `$${n % 1 === 0 ? n : n.toFixed(2)}`;
 const tagTone = (t: string) => (t === 'Local' ? 'turf' : t === 'Fan Pick' || t === 'New' ? 'gold' : t === 'Spicy' ? 'brand' : 'neutral');
@@ -117,6 +117,19 @@ function ComingSoonCard({ item }: { item: ComingSoonItem }) {
       </View>
     </Card>
   );
+}
+
+/**
+ * Splits a section's items into the admin's sub-categories (On Tap → Domestics, IPAs, ...), in their
+ * order. Drinks not in one come last, under "Other" - or with no heading if the section has none.
+ */
+function blocksFor(items: MenuItem[], subgroups: MenuSubgroup[]) {
+  const blocks = subgroups
+    .map((g) => ({ id: g.id, title: g.title, items: items.filter((i) => i.subgroup === g.id) }))
+    .filter((b) => b.items.length > 0);
+  const rest = items.filter((i) => !blocks.some((b) => b.id === i.subgroup));
+  if (rest.length > 0) blocks.push({ id: 'rest', title: blocks.length > 0 ? 'Other' : '', items: rest });
+  return blocks;
 }
 
 type MenuView = 'food' | 'bar' | 'soon';
@@ -229,8 +242,17 @@ export default function MenuScreen() {
                 <Text className="mb-1 text-xl font-black text-chalk">{s.title}</Text>
                 {s.blurb ? <Text className="text-sm text-brand-light">{s.blurb}</Text> : null}
                 {s.id === 'wings-traditional' || s.id === 'wings-boneless' ? <WingSauces /> : null}
-                {items.map((item, i) => (
-                  <MenuRow key={item.id} item={item} last={i === items.length - 1} />
+                {blocksFor(items, menu.data!.subgroups).map((b, bi) => (
+                  <View key={b.id}>
+                    {b.title ? (
+                      <Text className={`text-sm font-extrabold uppercase tracking-wide text-brand ${bi === 0 ? 'mt-2' : 'mt-4'}`}>
+                        {b.title}
+                      </Text>
+                    ) : null}
+                    {b.items.map((item, i) => (
+                      <MenuRow key={item.id} item={item} last={i === b.items.length - 1} />
+                    ))}
+                  </View>
                 ))}
               </Card>
             ))

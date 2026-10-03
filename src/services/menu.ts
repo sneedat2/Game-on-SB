@@ -1,4 +1,4 @@
-import type { ComingSoonItem, MenuItem, MenuSection } from '@/types';
+import type { ComingSoonItem, MenuItem, MenuSection, MenuSubgroup } from '@/types';
 import { menuItems, menuSections } from '@/data/menu';
 import { descriptionFor } from '@/data/menuDescriptions';
 import { comingSoon } from '@/data/mock/menu';
@@ -7,15 +7,21 @@ import { loadContent } from './content';
 import { mockDelay } from './storage';
 
 export interface MenuService {
-  getMenu(): Promise<{ sections: MenuSection[]; items: MenuItem[]; live: boolean }>;
+  getMenu(): Promise<{ sections: MenuSection[]; subgroups: MenuSubgroup[]; items: MenuItem[]; live: boolean }>;
   getComingSoon(): Promise<ComingSoonItem[]>;
 }
 
+interface LiveMenu {
+  items: MenuItem[];
+  subgroups: MenuSubgroup[];
+}
+
 // Live menu comes from our own server (server/index.mjs on Railway), which holds the Toast credentials.
-async function fetchLiveItems(): Promise<MenuItem[] | null> {
+async function fetchLiveMenu(): Promise<LiveMenu | null> {
   try {
-    const body = await apiFetch<{ items?: MenuItem[] }>('/api/menu');
-    return Array.isArray(body.items) && body.items.length > 0 ? body.items : null;
+    const body = await apiFetch<{ items?: MenuItem[]; subgroups?: MenuSubgroup[] }>('/api/menu');
+    if (!Array.isArray(body.items) || body.items.length === 0) return null;
+    return { items: body.items, subgroups: Array.isArray(body.subgroups) ? body.subgroups : [] };
   } catch {
     return null; // offline, Toast not configured, or not deployed with the server (e.g. local dev)
   }
@@ -30,11 +36,11 @@ const withDescriptions = (items: MenuItem[]) =>
 
 export const menuService: MenuService = {
   async getMenu() {
-    const live = await fetchLiveItems();
-    if (live) return { sections: menuSections, items: withDescriptions(live), live: true };
+    const live = await fetchLiveMenu();
+    if (live) return { sections: menuSections, subgroups: live.subgroups, items: withDescriptions(live.items), live: true };
     // Fallback: the menu copied from Toast into src/data/menu.ts.
     if (!apiConfigured) await mockDelay();
-    return { sections: menuSections, items: withDescriptions(menuItems), live: false };
+    return { sections: menuSections, subgroups: [], items: withDescriptions(menuItems), live: false };
   },
 
   // Edited at /admin → Coming Soon (Toast has no concept of "not on the menu yet").

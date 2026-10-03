@@ -24,7 +24,7 @@ All-Star member; any 10-digit number returns a generated guest.
 
 | Tab | Features |
 | --- | --- |
-| **Home** | Yellow & black brand header · gameday countdown banner (Bengals / Bearcats / Reds / FC Cincinnati) · **Happy Hour** card (Mon–Fri 3–6 PM: countdown → happy hour → 1-hour 6 PM Surprise → next happy hour; weekday-only alerts) · quick actions · featured poll |
+| **Home** | Yellow & black brand header · gameday countdown banner (Bengals / Bearcats / Reds / FC Cincinnati) · **Happy Hour** card (Mon–Fri, tiered by the hour: 3–4 $1 bottles/$2 drafts, 4–5 $2/$3, 5–6 $3/$4 - shows the current tier and counts down to the next price change) · **Promos** card (admin-made promos with their own days/times; "surprise" promos stay hidden until they start; optional start alerts) · quick actions · featured poll |
 | **Menu** | The real Game On menu (`src/data/menu.ts`, copied from Toast). **Food** tab: Appetizers → Traditional Wings → Boneless Wings → Entrées → Sandwiches → Salads & Soups → Kids Meals → Sides → Seasonal → Lent → Beverages · **Bar 21+** tab: On Tap, Bottles & Cans, Seltzers, Cocktails & Shots, Wine — filled from the live Toast register menu (`/api/menu/groups` lists Toast group names for matching) · **Coming Soon** new food & drinks (incl. poll winners) · Toast online ordering in an in-app browser |
 | **Polls** | "Game On Wants to Know" feed with category filters, animated result bars on vote, **"We Made It Happen"** showcase of winners |
 | **Rewards** | Phone-number loyalty lookup (points, tier, progress, redeemable rewards) · coupon stash with timed, single-use QR codes + short fallback code |
@@ -32,8 +32,8 @@ All-Star member; any 10-digit number returns a generated guest.
 
 All bar-time logic (happy hour, 6 PM unlock) uses the bar's time zone (`America/New_York`), not the phone's.
 
-**Dev tip:** in development builds, long-press the 6 PM Surprise card to cycle through its
-`live` / `ended` / `counting-down` states without waiting for 6 PM.
+**Dev tip:** in development builds, long-press the Happy Hour card to cycle through its
+before / each tier / off states without waiting for the clock.
 
 ## Project layout
 
@@ -74,9 +74,25 @@ FC Cincinnati games from ESPN's public (unofficial) schedule feed hourly; the ad
 team and can add extra games/watch parties. Draft beer shows as one row per beer with each pour
 size and price (`server/toastMenu.mjs`, both Toast size setups supported).
 
+**Home Page layout** (`/admin` → Home Page): reorder, show/hide, rename the Happy Hour title, poll
+heading and quick buttons, and add message cards - with a live phone/website preview of unsaved
+changes (the app in a frame at `/?homePreview=1`, fed the draft via postMessage; `server/home.mjs`,
+`src/services/homeLayout.ts`).
+
+**Daily check-ins** (Rewards tab): one per phone per bar-local day, only within the radius of the
+bar (`server/checkins.mjs`; settings, map pin and counts in `/admin` → Check-ins). Uses the browser's
+location on the website; the phone app will need `expo-location`. Points will be layered on later.
+
+`/admin` → **Menu** edits the live Toast menu without touching Toast: rename items, change or remove
+descriptions, hide items or whole sections (`server/menuOverrides.mjs`). **Bar 21+ settings** there:
+hide all bar prices (names only - prices and sizes aren't sent to the app at all) and add
+sub-categories inside a section (On Tap → Domestics, IPAs; Bottles & Cans → Domestics, Imports), in
+your order. Ungrouped drinks show last under "Other"; a section without any (e.g. Wine) stays one list. Descriptions: admin edit >
+Toast's own > website copy (`src/data/menuDescriptions.json`).
+
 `https://<your-site>/admin` → **App Status** opens/closes the app: while closed, guests get a
 "Be right back" page (with your message) and a signed-in admin still sees the real app
-(`server/maintenance.mjs`). The admin also edits hours, happy hour, the 6 PM Surprise deals, polls (with live
+(`server/maintenance.mjs`). The admin also edits hours, happy hour tiers, promos (`server/promos.mjs`), polls (with live
 results), gameday games, Coming Soon and "We Made It Happen". Poll votes are counted on the server,
 one per phone. Set these in **Railway → Variables**:
 

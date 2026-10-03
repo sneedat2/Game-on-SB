@@ -67,8 +67,8 @@ const server = createServer(async (req, res) => {
     try {
       const menu = await getCachedMenu();
       // Admin edits (/admin → Menu) are applied on every request, so they show up right away.
-      const items = applyOverrides(menu.items, getContent().menuOverrides);
-      return sendJson(res, 200, { ...menu, items }, { 'Cache-Control': 'no-cache' });
+      const { items, subgroups } = applyOverrides(menu.items, getContent().menuOverrides);
+      return sendJson(res, 200, { ...menu, items, subgroups }, { 'Cache-Control': 'no-cache' });
     } catch (e) {
       const status = e instanceof ToastConfigError ? 503 : 502;
       console.error('[menu]', e.message);

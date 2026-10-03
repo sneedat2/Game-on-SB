@@ -25,7 +25,7 @@ export const defaultMaintenance = () => ({
 });
 
 /** Admin menu edits (/admin → Menu), keyed by "section|item name". Empty = Toast as-is. */
-export const defaultMenuOverrides = () => ({ items: {}, hiddenSections: [] });
+export const defaultMenuOverrides = () => ({ items: {}, hiddenSections: [], barGroups: [], hideBarPrices: false });
 
 /** Automatic schedules on, plus the gameday specials shown under each team's games. */
 export const defaultGamedaySettings = () => ({
@@ -81,6 +81,13 @@ export function migrateContent(c) {
   }
   if (!c.menuOverrides) {
     c.menuOverrides = defaultMenuOverrides();
+    changed = true;
+  }
+  // Bar groups became sub-categories of a section: place older ones under the section their drinks are in.
+  for (const g of c.menuOverrides.barGroups ?? []) {
+    if (g.parent) continue;
+    const [key] = Object.entries(c.menuOverrides.items ?? {}).find(([, e]) => e.group === g.id) ?? [];
+    g.parent = key ? key.split('|')[0] : 'draft';
     changed = true;
   }
   if (!c.gamedaySettings) {

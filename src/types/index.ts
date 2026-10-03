@@ -91,6 +91,13 @@ export type MenuSectionId =
   | 'cocktails'
   | 'wine';
 
+/** A sub-category inside a Bar 21+ section, made in /admin → Menu (On Tap → Domestics, IPAs). */
+export interface MenuSubgroup {
+  id: string;
+  title: string;
+  sectionId: MenuSectionId;
+}
+
 export interface MenuItem {
   id: string;
   sectionId: MenuSectionId;
@@ -102,6 +109,7 @@ export interface MenuItem {
   soldOut?: boolean; // mirrors Toast's "OUT OF STOCK"
   tags?: string[]; // "Local", "Spicy", "New", "Fan Pick"
   toastGuid?: string; // Toast menu item GUID once synced from the POS
+  subgroup?: string; // MenuSubgroup id, if the admin put this drink in one
 }
 
 export interface MenuSection {

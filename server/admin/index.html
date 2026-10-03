@@ -18,6 +18,7 @@
   nav button { background:var(--card); color:var(--text); border:1px solid var(--line); white-space:nowrap; }
   nav button.active { background:var(--brand); color:#0A0A0A; border-color:var(--brand); }
   .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px; }
+  .subcats { border-top:1px solid var(--line); padding-top:10px; margin-top:10px; }
   .row { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-bottom:8px; }
   .row > label { flex:1 1 160px; }
   label { display:block; font-size:12px; color:var(--muted); font-weight:600; }
@@ -539,7 +540,7 @@
     })();
     return [
       h('h2', {}, 'Menu'),
-      h('p', { class: 'hint' }, 'Your Toast menu as guests see it in the app. Rename items, change descriptions, or hide items and whole sections. Prices and sold-out status still come from Toast automatically.'),
+      h('p', { class: 'hint' }, 'Your Toast menu as guests see it in the app. Rename items, change descriptions, or hide items and whole sections. On the Bar 21+ tab you can also hide prices and sort drinks into your own groups. Prices and sold-out status still come from Toast automatically.'),
       wrap,
     ];
   }
@@ -548,21 +549,83 @@
     const ov = structuredClone(menuData.overrides ?? {});
     ov.items ??= {};
     ov.hiddenSections ??= [];
+    ov.barGroups ??= [];
+    ov.hideBarPrices ??= false;
     let only = 'all';
     let query = '';
     const money = (n) => `$${Number(n).toFixed(2)}`;
     const priceText = (i) => (i.sizes?.length ? i.sizes.map((s) => `${s.label} ${money(s.price)}`).join(' · ') : typeof i.price === 'number' ? money(i.price) : '');
+    const barIds = new Set(menuData.sections.filter((s) => s.tab === 'Bar 21+').map((s) => s.id));
     const list = h('div');
+    const groupsBox = h('div');
+
+    // ----- Bar 21+ settings: hide prices + sub-categories per section (On Tap → Domestics, IPAs) -----
+    const barSectionsWithItems = () => menuData.sections.filter((s) => barIds.has(s.id) && menuData.items.some((i) => i.sectionId === s.id));
+    const subsOf = (sectionId) => ov.barGroups.filter((g) => g.parent === sectionId);
+
+    function drawGroups() {
+      const all = ov.barGroups;
+      const count = (id) => Object.values(ov.items).filter((e) => e.group === id).length;
+      // Reorder within one section (swap with the neighbouring sub-category of that section).
+      const move = (subs, i, d) => {
+        const a = all.indexOf(subs[i]);
+        const b = all.indexOf(subs[i + d]);
+        [all[a], all[b]] = [all[b], all[a]];
+        drawGroups(); draw();
+      };
+      groupsBox.replaceChildren(...barSectionsWithItems().map((s) => {
+        const subs = subsOf(s.id);
+        return h('div', { class: 'subcats', 'data-section': s.id },
+          h('div', { class: 'row' }, h('strong', { style: 'flex:1' }, s.title),
+            h('span', { class: 'muted' }, subs.length ? `${subs.length} sub-categor${subs.length === 1 ? 'y' : 'ies'}` : 'no sub-categories - one plain list')),
+          ...subs.map((grp, i) => h('div', { class: 'row' },
+            h('label', { style: 'flex:1' }, `${count(grp.id)} drink${count(grp.id) === 1 ? '' : 's'}`,
+              h('input', { value: grp.name, maxlength: 30, placeholder: 'e.g. Domestics', oninput: (ev) => { grp.name = ev.target.value; }, onchange: () => draw() })),
+            h('button', { class: 'ghost small', disabled: i === 0, 'aria-label': 'Move up', onclick: () => move(subs, i, -1) }, '↑'),
+            h('button', { class: 'ghost small', disabled: i === subs.length - 1, 'aria-label': 'Move down', onclick: () => move(subs, i, 1) }, '↓'),
+            h('button', { class: 'danger small', onclick: () => {
+              if (!confirm(`Delete “${grp.name || 'unnamed'}”? Its drinks go back to the plain ${s.title} list.`)) return;
+              all.splice(all.indexOf(grp), 1);
+              for (const e of Object.values(ov.items)) if (e.group === grp.id) delete e.group;
+              drawGroups(); draw();
+            } }, 'Delete'))),
+          h('button', { class: 'ghost small', disabled: all.length >= 40, onclick: () => {
+            const grp = { id: `g-${crypto.randomUUID().slice(0, 8)}`, name: '', parent: s.id };
+            all.push(grp);
+            drawGroups(); draw();
+            const inputs = [...groupsBox.querySelectorAll('.subcats')].find((el) => el.dataset.section === s.id)?.querySelectorAll('input');
+            inputs?.[inputs.length - 1]?.focus();
+          } }, `+ Add ${s.title} sub-category`));
+      }));
+    }
+
+    function barSettings() {
+      drawGroups();
+      return h('div', { class: 'card' },
+        h('strong', { style: 'font-size:18px' }, 'Bar 21+ settings'),
+        h('div', { class: 'row' }, h('label', { class: 'check' },
+          h('input', { type: 'checkbox', checked: ov.hideBarPrices, onchange: (ev) => { ov.hideBarPrices = ev.target.checked; } }),
+          'Hide prices on the Bar 21+ tab (show just the list of drinks)')),
+        h('p', { class: 'hint' }, 'Sub-categories show inside their section, in this order (e.g. On Tap → Domestics, IPAs). Pick one on each drink below. Drinks without one show last under “Other”. A section with no sub-categories (e.g. Wine) stays one plain list.'),
+        groupsBox);
+    }
 
     function itemEditor(i) {
       const e = ov.items[i.key] ?? {};
       const set = (patch) => { ov.items[i.key] = { ...(ov.items[i.key] ?? {}), ...patch }; };
-      const edited = Boolean(e.name || e.description || e.hidden || e.noDescription);
+      const edited = Boolean(e.name || e.description || e.hidden || e.noDescription || e.group);
       const descValue = e.noDescription ? '' : e.description ?? i.description ?? '';
+      const subs = subsOf(i.sectionId);
+      const groupPicker = subs.length
+        ? h('div', { class: 'row' }, h('label', {}, 'Sub-category', h('select', { onchange: (ev) => { set({ group: ev.target.value || undefined }); drawGroups(); draw(); } },
+          h('option', { value: '' }, 'None (shows under “Other”)'),
+          subs.map((g) => h('option', { value: g.id, selected: e.group === g.id }, g.name || '(unnamed)')))))
+        : '';
       return h('div', { class: `menu-item${e.hidden ? ' hidden-item' : ''}` },
         h('div', { class: 'row', style: 'margin-bottom:2px' },
           h('strong', { style: 'flex:1' }, i.name, i.soldOut ? ' · sold out' : '', edited ? h('span', { class: 'edited' }, ' edited') : ''),
-          h('span', { class: 'muted' }, priceText(i))),
+          h('span', { class: 'muted' }, barIds.has(i.sectionId) && ov.hideBarPrices ? 'price hidden' : priceText(i))),
+        groupPicker,
         h('div', { class: 'row' }, h('label', {}, 'Name in the app', h('input', { value: e.name ?? '', placeholder: i.name, maxlength: 80, oninput: (ev) => set({ name: ev.target.value }) }))),
         h('div', { class: 'row' }, h('label', {}, 'Description (clear it to show none)', h('textarea', {
           value: descValue, placeholder: 'No description - type one here', maxlength: 600,
@@ -574,7 +637,7 @@
         h('div', { class: 'row' },
           h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: e.hidden, onchange: (ev) => { set({ hidden: ev.target.checked }); draw(); } }), 'Hide this item'),
           h('span', { style: 'flex:1' }),
-          edited ? h('button', { class: 'ghost small', onclick: () => { delete ov.items[i.key]; draw(); } }, 'Reset to Toast') : ''));
+          edited ? h('button', { class: 'ghost small', onclick: () => { delete ov.items[i.key]; drawGroups(); draw(); } }, 'Reset to Toast') : ''));
     }
 
     function draw() {
@@ -607,6 +670,7 @@
           h('option', { value: 'all' }, 'All sections'),
           menuData.sections.filter((s) => menuData.items.some((i) => i.sectionId === s.id)).map((s) => h('option', { value: s.id }, `${s.tab} · ${s.title}`)))),
         h('label', {}, 'Search', h('input', { placeholder: 'e.g. Miller Lite', oninput: (ev) => { query = ev.target.value; draw(); } }))),
+      barSettings(),
       list,
       saveBar('menuOverrides', () => ov),
     );
@@ -623,6 +687,7 @@
     manualFull: false,
     ordersLast15: 4,
     capacity: 8, // Toast kitchen capacity: orders per 15 minutes
+    cashAllowed: false, // start prepaid-only; cash at the bar can be switched on later
     start: '11:30',
     end: '13:30',
     headline: 'Quick Lunch: in & out on your break',
@@ -631,6 +696,7 @@
   };
 
   const LUNCH_SCENES = {
+    // Scenes leave the payment setting alone, so you can show prepaid vs. cash in any scene.
     'Before lunch': { minutes: 11 * 60, seated: 3, orders: 0, manualFull: false },
     'Quiet lunch': { minutes: 12 * 60 + 20, seated: 6, orders: 3, manualFull: false },
     'Lunch rush': { minutes: 12 * 60 + 10, seated: 11, orders: 11, manualFull: false },
@@ -679,7 +745,7 @@
       if (!s.inWindow) { line = s.before ? `Before ${fmtT(d.start)}: the card shows a “starts at” teaser - ordering isn’t open yet.` : `After ${fmtT(d.end)}: the Quick Lunch card is hidden.`; go = false; }
       else if (d.manualFull) { line = 'Staff flipped “Lunch is full” → order button hidden for everyone.'; go = false; }
       else if (s.autoFull) { line = `Only ${s.free} table${s.free === 1 ? '' : 's'} free (minimum ${d.minFree}) → order button hidden automatically.`; go = false; }
-      else { line = `${s.free} tables free (minimum ${d.minFree}) → guests can order ahead. Toast quotes ready in ~${s.readyIn} min.`; go = true; }
+      else { line = `${s.free} tables free (minimum ${d.minFree}) → guests can order ahead${d.cashAllowed ? ' (card or cash)' : ', prepaid by card'}. Toast quotes ready in ~${s.readyIn} min.`; go = true; }
       statusBox.replaceChildren(h('div', { class: `status-line ${go ? 'go' : 'stop'}` }, line));
     }
 
@@ -696,8 +762,11 @@
           : s.full
             ? h('div', { class: 'ph-full' }, h('strong', {}, 'We’re packed right now 🍻'), h('div', { style: 'margin-top:4px' }, 'Walk-ins welcome at the bar - or check back in a few minutes.'))
             : [
-              h('button', { class: 'ph-btn', onclick: () => toast('Demo: this would open your Toast ordering page') }, `Order lunch ahead · ready in ~${s.readyIn} min`),
-              h('button', { class: 'ph-btn alt', onclick: () => toast('Demo: needs Toast Order & Pay (table QR codes)') }, 'Order from your table (with Toast Order & Pay)'),
+              h('button', { class: 'ph-btn', onclick: () => toast(d.cashAllowed ? 'Demo: opens your Toast ordering page (card now or cash at the bar)' : 'Demo: opens your Toast ordering page - card payment required') },
+                `${d.cashAllowed ? 'Order lunch ahead' : 'Order & pay ahead'} · ready in ~${s.readyIn} min`),
+              h('div', { class: 'ph-msg', style: 'text-align:center;margin-top:6px' },
+                d.cashAllowed ? '💳 Pay by card now, or 💵 cash at the bar' : '💳 Prepaid: pay by card when you order'),
+              h('button', { class: 'ph-btn alt', onclick: () => toast('Demo: needs Toast Order & Pay (table QR codes) - always prepaid') }, 'Order from your table (with Toast Order & Pay)'),
             ];
         card = h('div', { class: `ph-card${s.inWindow && !s.full ? ' live' : ''}` },
           h('div', { class: 'ph-label' }, h('span', {}, '🥪 Quick Lunch'), pill),
@@ -754,6 +823,12 @@
             h('p', { class: 'hint' }, `Orders in the last 15 minutes (limit ${d.capacity} per 15 min). Over the limit, Toast pushes the ready time back instead of overloading the kitchen.`),
             orders),
           h('div', { class: 'card' },
+            h('strong', {}, '💳 Payment'),
+            h('p', { class: 'hint' }, 'Starts prepaid-only: guests pay by card when they order, so there are no unpaid no-shows at lunch.'),
+            h('label', { class: 'check' }, h('input', { type: 'radio', checked: true, disabled: true }), 'Prepaid by card (required to start)'),
+            h('label', { class: 'check', style: 'margin-top:6px' }, h('input', { type: 'checkbox', checked: d.cashAllowed, onchange: (e) => { d.cashAllowed = e.target.checked; update(); } }), 'Also allow cash at the bar'),
+            h('span', { class: 'pill soon', style: 'display:inline-block;margin-top:6px' }, 'LATER - OFF AT LAUNCH')),
+          h('div', { class: 'card' },
             h('strong', {}, '✏️ What the owner would edit'),
             h('div', { class: 'row', style: 'margin-top:8px' },
               h('label', {}, 'Starts', h('input', { type: 'time', value: d.start, oninput: (e) => { d.start = e.target.value || d.start; update(); } })),
@@ -769,6 +844,7 @@
           h('li', {}, 'Every minute the app counts tables with an open check in Toast. ', h('span', {}, 'Needs servers to ring checks on tables (floor plan) and Toast API access to orders + tables.')),
           h('li', {}, 'Below the minimum free tables, the order button hides automatically. ', h('span', {}, 'Staff can also flip “Lunch is full” from a phone at any time.')),
           h('li', {}, 'Toast kitchen-capacity throttling protects the kitchen. ', h('span', {}, 'Set in Toast: X orders per 15 min - even orders placed straight on the Toast page are covered.')),
+          h('li', {}, 'Lunch orders are prepaid by card at launch. ', h('span', {}, 'Payment is handled by Toast’s ordering page (the app never touches card details). Cash at the bar can be switched on later in Toast’s online ordering payment settings - the app just updates its wording.')),
           h('li', {}, 'Optional: Toast scheduled orders (pick a ready time) and Toast Order & Pay (order from the table by QR code). ', h('span', {}, 'Both are switched on in Toast.')))),
     ];
   }

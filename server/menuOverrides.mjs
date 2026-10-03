@@ -54,21 +54,46 @@ export function withBase(items) {
   return items.map((i) => ({ ...i, key: itemKey(i), description: i.description || websiteDescription(i.name) }));
 }
 
-/** The menu guests see: base menu with the admin's edits applied. */
+export const BAR_SECTION_IDS = MENU_SECTIONS.filter((s) => s.tab === 'Bar 21+').map((s) => s.id);
+const isBar = (id) => BAR_SECTION_IDS.includes(id);
+
+/** The section part of an item key ("bottles|bud light" -> "bottles"). */
+export const sectionOfKey = (key) => String(key).split('|')[0];
+
+/**
+ * The menu guests see: base menu with the admin's edits applied. Returns the items plus the Bar 21+
+ * sub-categories (e.g. On Tap → Domestics, IPAs), in the admin's order; grouped items carry `subgroup`.
+ */
 export function applyOverrides(items, overrides) {
   const hiddenSections = new Set(overrides?.hiddenSections ?? []);
   const edits = overrides?.items ?? {};
+  const groups = overrides?.barGroups ?? [];
+  const parentOf = new Map(groups.map((g) => [g.id, g.parent]));
+  const hideBarPrices = Boolean(overrides?.hideBarPrices);
   const out = [];
   for (const item of withBase(items)) {
     const edit = edits[item.key];
     if (hiddenSections.has(item.sectionId) || edit?.hidden) continue;
     const { key: _key, ...rest } = item;
-    out.push({
+    const bar = isBar(rest.sectionId);
+    // A drink can sit in one of its section's sub-categories (On Tap → Domestics, IPAs, ...).
+    const subgroup = bar && edit?.group && parentOf.get(edit.group) === rest.sectionId ? edit.group : undefined;
+    const next = {
       ...rest,
+      ...(subgroup && { subgroup }),
       name: edit?.name || rest.name,
       // '' tells the app "no description" (so it doesn't fill one back in).
       description: edit?.noDescription ? '' : edit?.description || rest.description,
-    });
+    };
+    if (bar && hideBarPrices) {
+      // Names only: prices and pour sizes aren't sent at all.
+      delete next.price;
+      delete next.sizes;
+    }
+    out.push(next);
   }
-  return out;
+  const subgroups = groups
+    .filter((g) => out.some((i) => i.subgroup === g.id))
+    .map((g) => ({ id: g.id, title: g.name, sectionId: g.parent }));
+  return { items: out, subgroups };
 }
