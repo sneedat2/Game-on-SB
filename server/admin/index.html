@@ -156,6 +156,7 @@
         content[section] = res[section];
         msg.className = 'msg ok'; msg.textContent = 'Saved ✓ - live in the app within a minute.';
         if (section === 'polls') { render(); toast('Polls saved ✓ - live in the app within a minute.'); } // redraw picks up new ids
+        if (section === 'coupons') { render(); toast('Coupons saved ✓ - live in the app within a minute.'); }
         if (section === 'menuOverrides' && menuData) menuData.overrides = res.menuOverrides;
         if (section === 'home') { render(); toast('Home page saved ✓ - guests see it within a minute.'); } // picks up new card ids
         if (section === 'maintenance') { render(); toast(res.maintenance.enabled ? 'App is now CLOSED to guests' : 'App is OPEN ✓'); }
@@ -373,6 +374,55 @@
       [check(c, 'fromPoll', 'Fan Pick (won a poll)')],
     ],
   });
+
+  // ---------- Coupon Stash (Rewards tab) ----------
+  const COUPON_ICONS = { food: '🍴 Food', wings: '🍗 Wings', kids: '🧒 Kids', drink: '🍺 Drink', deal: '🎟️ Deal' };
+
+  function couponsSection() {
+    const coupons = structuredClone(content.coupons ?? []);
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD
+    const list = h('div');
+    const move = (i, d) => { [coupons[i], coupons[i + d]] = [coupons[i + d], coupons[i]]; draw(); };
+    const status = (c) => (c.hidden ? 'Hidden' : c.expiresOn && c.expiresOn < today ? 'Expired - not shown' : 'Showing in the app');
+    function couponCard(c, i) {
+      // Heading and status update as you type (no redraw, so the cursor stays put).
+      const heading = h('strong', { style: 'flex:1;font-size:17px' }, c.title || 'New coupon');
+      const state = h('span', { class: 'muted' }, status(c));
+      const card = h('div', { class: `card${c.hidden ? ' hidden-item' : ''}` },
+        h('div', { class: 'row' }, heading, state,
+          h('button', { class: 'ghost small', disabled: i === 0, 'aria-label': 'Move up', onclick: () => move(i, -1) }, '↑'),
+          h('button', { class: 'ghost small', disabled: i === coupons.length - 1, 'aria-label': 'Move down', onclick: () => move(i, 1) }, '↓')),
+        h('div', { class: 'row' },
+          h('label', {}, 'Coupon name', h('input', { value: c.title, maxlength: 60, placeholder: 'Free App with Entrée', oninput: (e) => { c.title = e.target.value; heading.textContent = c.title || 'New coupon'; } })),
+          select(c, 'kind', 'Icon', COUPON_ICONS)),
+        h('div', { class: 'row' }, area(c, 'description', 'What they get')),
+        h('div', { class: 'row' }, text(c, 'finePrint', 'Fine print', { maxlength: 200, placeholder: 'One per table. Dine-in only.' })),
+        h('div', { class: 'row' },
+          h('label', {}, 'Expires (leave empty for no expiration)', h('input', { type: 'date', value: c.expiresOn, oninput: (e) => { c.expiresOn = e.target.value; state.textContent = status(c); } }))),
+        h('div', { class: 'row' },
+          check(c, 'singleUse', 'One use per phone'),
+          h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: c.hidden, onchange: (e) => {
+            c.hidden = e.target.checked; state.textContent = status(c); card.classList.toggle('hidden-item', c.hidden);
+          } }), 'Hide from the app'),
+          h('span', { style: 'flex:1' }),
+          h('button', { class: 'danger small', onclick: () => { if (confirm(`Delete “${c.title || 'this coupon'}”?`)) { coupons.splice(i, 1); draw(); } } }, 'Delete')));
+      return card;
+    }
+    const draw = () => list.replaceChildren(...(coupons.length ? coupons.map(couponCard)
+      : [h('p', { class: 'muted' }, 'No coupons. The Coupon Stash is hidden in the app until you add one.')]));
+    draw();
+    return [
+      h('h2', {}, 'Coupon Stash'),
+      h('p', { class: 'hint' }, 'Coupons on the Rewards tab, in this order. Guests tap Redeem and show a QR code that’s good for 10 minutes. Expired coupons disappear from the app on their own.'),
+      h('button', { class: 'ghost', onclick: () => {
+        coupons.unshift({ kind: 'deal', title: '', description: '', finePrint: '', expiresOn: '', singleUse: true, hidden: false });
+        draw();
+        list.querySelector('input')?.focus();
+      } }, '+ Add coupon'),
+      list,
+      saveBar('coupons', () => coupons),
+    ];
+  }
 
   const showcaseSection = () => listSection({
     title: 'We Made It Happen', section: 'showcase', hint: 'Poll winners that became real - shown on the Polls tab.',
@@ -855,7 +905,7 @@
     ];
   }
 
-  const TABS = { status: ['App Status', statusSection], home: ['Home Page', homeSection], menu: ['Menu', menuSection], checkins: ['Check-ins', checkinsSection], hours: ['Hours & Happy Hour', hoursSection], promos: ['Promos', promosSection], polls: ['Polls', pollsSection], gameday: ['Gameday', gamedaySection], soon: ['Coming Soon', comingSoonSection], showcase: ['We Made It', showcaseSection], lunchDemo: ['💡 Quick Lunch Demo', lunchDemoSection] };
+  const TABS = { status: ['App Status', statusSection], home: ['Home Page', homeSection], menu: ['Menu', menuSection], checkins: ['Check-ins', checkinsSection], hours: ['Hours & Happy Hour', hoursSection], promos: ['Promos', promosSection], polls: ['Polls', pollsSection], gameday: ['Gameday', gamedaySection], soon: ['Coming Soon', comingSoonSection], coupons: ['Coupons', couponsSection], showcase: ['We Made It', showcaseSection], lunchDemo: ['💡 Quick Lunch Demo', lunchDemoSection] };
 
   function render() {
     headerRight.replaceChildren(h('button', { class: 'small', onclick: logout }, 'Sign out'));

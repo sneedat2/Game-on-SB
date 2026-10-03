@@ -11,7 +11,7 @@
 //   POST /api/admin/login              { password } -> { token }
 //   GET  /api/admin/content            everything, including all polls and vote totals
 //   POST /api/admin/logout             clears the admin cookie
-//   PUT  /api/admin/<section>          replace one section (home, menuOverrides, maintenance, settings, promos, polls, gamedaySettings, gameday, comingSoon, showcase)
+//   PUT  /api/admin/<section>          replace one section (home, menuOverrides, maintenance, settings, promos, polls, gamedaySettings, gameday, comingSoon, coupons, showcase)
 import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import { adminEnabled, checkPassword, issueToken, loginAllowed, recordFailure, verifyToken } from './auth.mjs';
@@ -92,6 +92,7 @@ const keepId = (v) => (typeof v === 'string' && /^[\w-]{1,40}$/.test(v) ? v : ne
 
 const TEAMS = ['bengals', 'bearcats', 'reds', 'fcc'];
 const POLL_CATEGORIES = ['food', 'drinks', 'events', 'debates'];
+const COUPON_ICONS = ['food', 'wings', 'kids', 'drink', 'deal'];
 
 /** TikTok link for the Info tab: a tiktok.com link or just the @handle. '' = no TikTok row. */
 function tiktokUrl(value) {
@@ -230,6 +231,24 @@ const validators = {
     }));
   },
 
+  coupons(v) {
+    return list(v, 'Coupons', 30).map((c, i) => {
+      const n = `Coupon ${i + 1}`;
+      const expiresOn = typeof c?.expiresOn === 'string' && c.expiresOn ? c.expiresOn : '';
+      if (expiresOn && !/^\d{4}-\d{2}-\d{2}$/.test(expiresOn)) fail(`${n} expiration must be a date`);
+      return {
+        id: keepId(c?.id),
+        kind: oneOf(c?.kind, `${n} icon`, COUPON_ICONS),
+        title: str(c?.title, `${n} title`, 60),
+        description: str(c?.description, `${n} description`, 200, { required: false }),
+        finePrint: str(c?.finePrint, `${n} fine print`, 200, { required: false }),
+        expiresOn, // '' = no expiration
+        singleUse: Boolean(c?.singleUse),
+        hidden: Boolean(c?.hidden),
+      };
+    });
+  },
+
   showcase(v) {
     return list(v, 'Showcase', 20).map((s, i) => {
       const share = Number(s?.winningShare);
@@ -295,6 +314,10 @@ async function publicContent(c) {
     gameday: (await gamedayGames(c)).slice(0, 6),
     comingSoon: c.comingSoon,
     showcase: c.showcase,
+    // Coupon Stash: hidden and expired coupons stay out of the app.
+    coupons: c.coupons
+      .filter((x) => !x.hidden && (!x.expiresOn || x.expiresOn >= barClock().date))
+      .map(({ hidden: _hidden, ...x }) => x),
   };
 }
 
@@ -449,7 +472,7 @@ export async function handleContentApi(req, res, path) {
         }
       }
 
-      const section = /^\/api\/admin\/(home|menuOverrides|maintenance|settings|promos|polls|gamedaySettings|gameday|comingSoon|showcase)$/.exec(path)?.[1];
+      const section = /^\/api\/admin\/(home|menuOverrides|maintenance|settings|promos|polls|gamedaySettings|gameday|comingSoon|coupons|showcase)$/.exec(path)?.[1];
       if (section && req.method === 'PUT') {
         const clean = validators[section](await readJson(req));
         await update((draft) => {

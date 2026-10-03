@@ -38,6 +38,13 @@ export const defaultGamedaySettings = () => ({
   },
 });
 
+/** Coupon Stash on the Rewards tab (/admin → Coupons). SAMPLES - the same ones the app showed before. */
+export const defaultCoupons = () => [
+  { id: 'c-free-app', kind: 'food', title: 'Free App with Entrée', description: 'Any starter up to $12 free with the purchase of an entrée.', finePrint: 'One per table. Not valid with other offers. Dine-in only.', expiresOn: '', singleUse: true, hidden: false },
+  { id: 'c-kids', kind: 'kids', title: 'Free Kids Meal with Entrée', description: 'One free kids meal per adult entrée purchased.', finePrint: 'Kids 12 & under. Dine-in only.', expiresOn: '', singleUse: true, hidden: false },
+  { id: 'c-wings', kind: 'wings', title: 'Buy 10 Wings, Get 10 Free', description: 'Order 10 wings in any flavor, get 10 more on us.', finePrint: 'Equal or lesser value. Not valid during gameday specials.', expiresOn: '', singleUse: true, hidden: false },
+];
+
 // The sample games the first version seeded into every store - removed on upgrade.
 const SEEDED_SAMPLES = [
   ['bengals', 'Steelers', '$20 domestic buckets'],
@@ -90,6 +97,10 @@ export function migrateContent(c) {
     g.parent = key ? key.split('|')[0] : 'draft';
     changed = true;
   }
+  if (!Array.isArray(c.coupons)) {
+    c.coupons = defaultCoupons();
+    changed = true;
+  }
   if (!c.gamedaySettings) {
     c.gamedaySettings = defaultGamedaySettings();
     c.gameday = (c.gameday ?? []).filter(
@@ -134,6 +145,7 @@ export function defaultContent() {
       { id: id(), kind: 'food', title: 'October Burger of the Month', description: 'Your pick hits the grill when voting closes.', eta: 'After voting closes', fromPoll: true },
       { id: id(), kind: 'drink', title: 'Fall Seasonal Drafts', description: 'Oktoberfest and pumpkin ales rotating onto the taps.', eta: 'Early October', fromPoll: false },
     ],
+    coupons: defaultCoupons(),
     showcase: [
       { id: id(), title: 'Thursday Trivia Night', description: 'Trivia beat karaoke by a nose. First round starts at 7:30.', pollQuestion: 'Trivia vs. Darts vs. Karaoke', winningShare: 47, launchedOn: '2026-09-18', status: 'event-booked' },
     ],
