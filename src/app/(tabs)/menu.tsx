@@ -119,6 +119,35 @@ function ComingSoonCard({ item }: { item: ComingSoonItem }) {
   );
 }
 
+/** A Bar 21+ sub-category (e.g. On Tap → Domestics): tap to open its drinks. Starts closed. */
+function SubgroupDropdown({ title, items }: { title: string; items: MenuItem[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <View className="mt-2 rounded-xl bg-ink-700">
+      <Pressable
+        onPress={() => setOpen((o) => !o)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={`${title}, ${items.length} drink${items.length === 1 ? '' : 's'}`}
+        className="flex-row items-center justify-between px-3 py-3"
+      >
+        <Text className="text-lg font-extrabold text-brand">{title}</Text>
+        <View className="flex-row items-center gap-2">
+          <Text className="text-xs text-muted">{items.length}</Text>
+          {open ? <ChevronUp size={20} color={colors.brand} /> : <ChevronDown size={20} color={colors.brand} />}
+        </View>
+      </Pressable>
+      {open ? (
+        <View className="px-3 pb-1">
+          {items.map((item, i) => (
+            <MenuRow key={item.id} item={item} last={i === items.length - 1} />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 /**
  * Splits a section's items into the admin's sub-categories (On Tap → Domestics, IPAs, ...), in their
  * order. Drinks not in one come last, under "Other" - or with no heading if the section has none.
@@ -242,18 +271,13 @@ export default function MenuScreen() {
                 <Text className="mb-1 text-xl font-black text-chalk">{s.title}</Text>
                 {s.blurb ? <Text className="text-sm text-brand-light">{s.blurb}</Text> : null}
                 {s.id === 'wings-traditional' || s.id === 'wings-boneless' ? <WingSauces /> : null}
-                {blocksFor(items, menu.data!.subgroups).map((b, bi) => (
-                  <View key={b.id}>
-                    {b.title ? (
-                      <Text className={`text-sm font-extrabold uppercase tracking-wide text-brand ${bi === 0 ? 'mt-2' : 'mt-4'}`}>
-                        {b.title}
-                      </Text>
-                    ) : null}
-                    {b.items.map((item, i) => (
-                      <MenuRow key={item.id} item={item} last={i === b.items.length - 1} />
-                    ))}
-                  </View>
-                ))}
+                {blocksFor(items, menu.data!.subgroups).map((b) =>
+                  b.title ? (
+                    <SubgroupDropdown key={b.id} title={b.title} items={b.items} />
+                  ) : (
+                    b.items.map((item, i) => <MenuRow key={item.id} item={item} last={i === b.items.length - 1} />)
+                  ),
+                )}
               </Card>
             ))
           )}
