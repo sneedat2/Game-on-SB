@@ -1,5 +1,5 @@
-// Lucide v1 dropped brand logos, so generic glyphs stand in for Facebook/Instagram.
-import { Camera, Clock, MapPin, Navigation, Phone, ShoppingBag, Users, type LucideIcon } from 'lucide-react-native';
+// Lucide v1 dropped brand logos, so generic glyphs stand in for Facebook/TikTok.
+import { Clock, Music2, MapPin, Navigation, Phone, ShoppingBag, Users, type LucideIcon } from 'lucide-react-native';
 import { Pressable, Text, View } from 'react-native';
 import { Button, Card, Screen, SectionHeader } from '@/components/ui';
 import { useFocusEffect } from 'expo-router';
@@ -28,6 +28,8 @@ function LinkRow({ icon: Icon, label, detail, onPress }: { icon: LucideIcon; lab
 export default function InfoScreen() {
   const { street, city, state, zip } = BAR.address;
   const settings = useSettings();
+  // Set in /admin → Hours & Happy Hour; only real tiktok.com links are opened.
+  const tiktok = /^https:\/\/([\w-]+\.)*tiktok\.com\//i.test(settings.social?.tiktok ?? '') ? settings.social!.tiktok! : '';
 
   // Pick up admin edits to hours/happy hour when this tab is opened.
   useFocusEffect(
@@ -92,8 +94,12 @@ export default function InfoScreen() {
           <LinkRow icon={ShoppingBag} label="Order Online" detail="Pickup via Toast" onPress={() => void openOnlineOrdering()} />
           <View className="h-px bg-ink-600" />
           <LinkRow icon={Users} label="Facebook" detail="Events, specials & game-watch parties" onPress={() => void openExternal(BAR.social.facebook)} />
-          <View className="h-px bg-ink-600" />
-          <LinkRow icon={Camera} label="Instagram" detail="Food pics & poll results" onPress={() => void openExternal(BAR.social.instagram)} />
+          {tiktok ? (
+            <>
+              <View className="h-px bg-ink-600" />
+              <LinkRow icon={Music2} label="TikTok" detail="Game day clips & behind the bar" onPress={() => void openExternal(tiktok)} />
+            </>
+          ) : null}
         </Card>
       </View>
 

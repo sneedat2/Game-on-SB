@@ -216,7 +216,7 @@
 
     return [
       h('h2', {}, 'Hours & Happy Hour'),
-      h('p', { class: 'hint' }, 'Shown on the Info tab and the Happy Hour card on Home.'),
+      h('p', { class: 'hint' }, 'Shown on the Info tab and the Happy Hour card on Home. Your TikTok link is at the bottom.'),
       h('div', { class: 'card' }, h('strong', {}, 'Kitchen hours'), rows,
         h('button', { class: 'ghost small', onclick: () => { s.hours.push({ days: '', open: '', close: '' }); drawRows(); } }, '+ Add row')),
       h('div', { class: 'card' }, h('strong', {}, 'Happy hour days'),
@@ -225,6 +225,12 @@
         h('p', { class: 'hint' }, 'Each hour can have its own deals. The Home card shows the current hour and counts down to the next price change.'),
         phases,
         h('button', { class: 'ghost small', onclick: addPhase }, '+ Add hour')),
+      h('div', { class: 'card' }, h('strong', {}, 'TikTok (Info tab)'),
+        h('p', { class: 'hint' }, 'Paste your TikTok profile link, or just your @name. Leave it empty to hide the TikTok row.'),
+        h('div', { class: 'row' }, h('label', {}, 'TikTok link', h('input', {
+          value: s.social?.tiktok ?? '', placeholder: 'https://www.tiktok.com/@yourname', maxlength: 200,
+          oninput: (e) => { s.social = { ...s.social, tiktok: e.target.value }; },
+        })))),
       saveBar('settings', () => s),
     ];
   }

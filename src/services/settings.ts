@@ -12,6 +12,8 @@ export interface BarSettings {
   hours: { days: string; open: string; close: string }[];
   /** Weekdays (0 = Sunday). start/end span all phases; each phase has its own prices. */
   happyHour: { days: number[]; start: string; end: string; phases: HappyHourPhase[] };
+  /** Social links set in the admin. An empty link hides its row on the Info tab. */
+  social?: { tiktok?: string };
 }
 
 export const DEFAULT_SETTINGS: BarSettings = {

@@ -93,6 +93,23 @@ const keepId = (v) => (typeof v === 'string' && /^[\w-]{1,40}$/.test(v) ? v : ne
 const TEAMS = ['bengals', 'bearcats', 'reds', 'fcc'];
 const POLL_CATEGORIES = ['food', 'drinks', 'events', 'debates'];
 
+/** TikTok link for the Info tab: a tiktok.com link or just the @handle. '' = no TikTok row. */
+function tiktokUrl(value) {
+  const raw = str(value, 'TikTok link', 200, { required: false }).trim();
+  if (!raw) return '';
+  const handle = /^@?([\w.]{2,24})$/.exec(raw)?.[1];
+  if (handle) return `https://www.tiktok.com/@${handle}`;
+  let url;
+  try {
+    url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+  } catch {
+    fail('TikTok link should look like https://www.tiktok.com/@yourname');
+  }
+  if (!/(^|\.)tiktok\.com$/i.test(url.hostname)) fail('TikTok link should be a tiktok.com link (or just your @name)');
+  url.protocol = 'https:';
+  return url.toString();
+}
+
 const validators = {
   home: (v) => validateHome(v, fail),
 
@@ -150,6 +167,7 @@ const validators = {
         close: str(h?.close, `Hours row ${i + 1} close`, 20),
       })),
       happyHour: { days: days.sort(), start: phases[0].start, end: phases.at(-1).end, phases },
+      social: { tiktok: tiktokUrl(v?.social?.tiktok) },
     };
   },
 

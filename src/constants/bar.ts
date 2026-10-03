@@ -20,8 +20,7 @@ export const BAR = {
   },
   social: {
     facebook: 'https://www.facebook.com/gameonwestside',
-    // TODO: replace with the bar's real Instagram profile; falls back to a search until confirmed.
-    instagram: 'https://www.instagram.com/explore/search/keyword/?q=game%20on%20bar%20cincinnati',
+    // TikTok is set in the admin (/admin → Hours & Happy Hour) - see services/settings.ts.
   },
   // Hours and happy hour are edited in the admin - see services/settings.ts for the defaults.
 } as const;

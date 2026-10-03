@@ -33,9 +33,15 @@ export default function PollsScreen() {
     }, [reloadPolls]),
   );
 
+  // Only categories that have an open poll get a chip. If the picked one empties out, show All.
+  const shownFilters = useMemo(
+    () => filters.filter((f) => f === 'all' || (polls.data?.list ?? []).some((p) => p.category === f)),
+    [polls.data],
+  );
+  const activeFilter = shownFilters.includes(filter) ? filter : 'all';
   const visible = useMemo(
-    () => (polls.data?.list ?? []).filter((p) => filter === 'all' || p.category === filter),
-    [polls.data, filter],
+    () => (polls.data?.list ?? []).filter((p) => activeFilter === 'all' || p.category === activeFilter),
+    [polls.data, activeFilter],
   );
   const votedCount = polls.data ? Object.keys(polls.data.mine).length : 0;
 
@@ -75,11 +81,13 @@ export default function PollsScreen() {
 
       {view === 'vote' ? (
         <>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-            {filters.map((f) => (
-              <Chip key={f} label={f === 'all' ? 'All' : categoryLabels[f]} active={filter === f} onPress={() => setFilter(f)} />
-            ))}
-          </ScrollView>
+          {shownFilters.length > 2 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              {shownFilters.map((f) => (
+                <Chip key={f} label={f === 'all' ? 'All' : categoryLabels[f]} active={activeFilter === f} onPress={() => setFilter(f)} />
+              ))}
+            </ScrollView>
+          ) : null}
 
           {polls.data && votedCount > 0 ? (
             <Text className="text-sm text-muted">
@@ -92,7 +100,7 @@ export default function PollsScreen() {
           ) : !polls.data ? (
             <LoadingState label="Loading polls…" />
           ) : visible.length === 0 ? (
-            <Text className="py-8 text-center text-muted">No open polls in this category - check back soon.</Text>
+            <Text className="py-8 text-center text-muted">No open polls right now - check back soon.</Text>
           ) : (
             visible.map((p) => <PollCard key={p.id} poll={p} myChoice={polls.data?.mine[p.id]} onVote={vote} />)
           )}

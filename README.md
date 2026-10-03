@@ -159,7 +159,7 @@ The admin page shows a warning while no volume is attached. Without the server (
 - [ ] Replace sample Coming Soon items (`src/data/mock/menu.ts`)
 - [x] Kitchen hours from Toast (`src/constants/bar.ts`) — add bar hours if they differ
 - [x] Facebook: https://www.facebook.com/gameonwestside
-- [ ] Set real **Instagram** URL (`BAR.social.instagram` — currently a search fallback)
+- [ ] Set the **TikTok** link in `/admin` → Hours & Happy Hour (the Info tab hides the row until it's set)
 - [ ] App icon / splash (`assets/`), bundle ids in `app.json`
 - [ ] Decide loyalty path A or B above
 - [ ] Responsible-service review of drink promos per Ohio liquor rules (e.g. happy-hour restrictions)
